@@ -30,6 +30,8 @@ from scipy.optimize import curve_fit
 #from multiprocessing import Pool
 import filterbank as fb
 
+from sim_burst import simulatedData
+
 np.seterr(all='raise')
 
 
@@ -119,7 +121,7 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
     return acfs
 
 
-def process_acf(record, width, freq_width, time_samp, chan_width, num_chans, index, acf_array, means, dtype):
+def process_acf(record, time_samp, chan_width, num_chans, index, acf_array, dtype):
     record = np.transpose(record)
 
 
@@ -164,7 +166,7 @@ def process_acf(record, width, freq_width, time_samp, chan_width, num_chans, ind
 
         record = np.reshape(record_ravel, (np.shape(record)[0], np.shape(record)[1]))
 
-        #zero_padded_data[index, :, : ] = np.transpose(record)
+
     except FloatingPointError:
         median=0
 
@@ -180,9 +182,6 @@ def process_acf(record, width, freq_width, time_samp, chan_width, num_chans, ind
 
         record = np.reshape(record_ravel, (np.shape(record)[0], np.shape(record)[1]))
 
-        #zero_padded_data[index, :, : ] = np.transpose(record)
-    #masked_record = np.ma.masked_where(record==0, record)
-
 
 
     median = np.median(record, axis=1)
@@ -193,46 +192,12 @@ def process_acf(record, width, freq_width, time_samp, chan_width, num_chans, ind
     except FloatingPointError:
         bandpass_corr_record = np.zeros(np.shape(record))
 
-
-
-    # acf = np.array(auto_corr2d_fft(bandpass_corr_record, np.shape(record)[1], dtype)[0])
-    # acf_shape = np.shape(acf)
-
-    # #interpolate central lag to reduce correlation resulting solely from noise correlating with itself
-    # acf[int(acf_shape[0]/2), int(acf_shape[1]/2)] = (acf[int(acf_shape[0]/2)+1, int(acf_shape[1]/2)] + acf[int(acf_shape[0]/2) - 1, int(acf_shape[1]/2)] \
-    #                                                 + acf[int(acf_shape[0]/2), int(acf_shape[1]/2)+1] +  acf[int(acf_shape[0]/2), int(acf_shape[1]/2)- 1])/4
-
-
-
-    # #interpolate central frequency lag to mitigate effects of narrow band rfi
-    # acf[int(acf_shape[0]/2), :] = (acf[int(acf_shape[0]/2) + 1,:] + acf[int(acf_shape[0]/2)-1,:])/2
-
-
-
-    # mask the central frequency lag to reduce effects of narrow-band RFI in the ACF
-
-    # center_freq_lag = int(num_chans/2)
-    # center_time_lag = 1024
-
-    # mask =  np.zeros((num_chans, 2048))
-    # mask[center_freq_lag, :] = np.ones(2048)
-    # mask[center_freq_lag-1, :] = np.ones(2048)
-
-
-    #acf = np.ma.array(acf, mask=mask)
-
-
-    # mean = np.mean(acf[center_freq_lag - int(freq_width/chan_width):center_freq_lag + int(freq_width/chan_width),\
-    #                 center_time_lag - int(width/time_samp):center_time_lag + int(width/time_samp)])
-
-    #acf_array.append(acf)
-    #means.append(mean)
-
     acf_array[index, :, :] = np.ma.array(np.array(auto_corr2d_fft(bandpass_corr_record, np.shape(record)[1], dtype)[0]))
 
 
 
     return #acf_array #means)
+
 
 
 
@@ -253,11 +218,7 @@ def dedisperse(spectra, DM, ctr_freq, chan_width, time_samp, dtype):
 
 
     time_lags = delta(freq, freq[0], DM)/(1000*time_samp)
-    # for frequency in freq:
 
-    #     time_lags.append(delta(frequency, freq[0], DM)/(1000*time_samp))
-
-    # time_lags = np.array(time_lags)
     max_lag = int(np.round(time_lags[-1]))
 
 
@@ -268,8 +229,7 @@ def dedisperse(spectra, DM, ctr_freq, chan_width, time_samp, dtype):
         bin_shift = int(np.round(time_lag))
 
         dedispersed_data[index, :] = spectra[index,  bin_shift: bin_shift + np.shape(dedispersed_data)[1]]
-        #printProgressBar(index, np.shape(time_lags)[0])
-    #print(np.shape(dedispersed_data[:, max_lag: num_time_bins]))
+
     return dedispersed_data
 
 
@@ -408,12 +368,16 @@ def print_candidates(all_candidates):
     print("Burst location (s)            ACF SNR            Burst fluence (Jyms)  ")
     print("**************************************************************************")
 
-    for candidate in total_candidates_sorted:
+    for index, candidate in enumerate(total_candidates_sorted):
 
         print(str(candidate.location) + print_string_sep(len(str(candidate.location)), 30) + "{:0.2f}".format(max(candidate.sigma)) + print_string_sep(len(str(max(candidate.sigma))), 21) + str(candidate.fluence))
 
         with open(outfilename + "_detected_bursts.txt", "a") as f:
-            f.write(str(candidate.location) + "," + str(max(candidate.sigma)) + "," + str(candidate.fluence) + "\n")
+            if index==0:
+                f.write("# Location (s), ACF SNR, Fluence")
+                f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(candidate.fluence) + "\n")
+            else:
+                f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(candidate.fluence) + "\n")                
 
         np.save(str(outfilename) + "_" + str(np.around(candidate.location, decimals=2)) + "s_" + "burst", \
             (candidate.metadata, candidate.acf, candidate.location, candidate.image, candidate.sigma, \
@@ -824,7 +788,7 @@ def main(loop_index):
             num_chans = data_shape[3]
             total_time_samples = data_shape[0]*data_shape[1]
         else:
-            data, sub_int_orig, ctr_freq, chan_width, time_samp, ra_val, dec_val, tstart, dtype = fb.filterbank_parse(filename, loop_index, split, types[dtype])
+            data, sub_int_orig, ctr_freq, chan_width, time_samp, ra_val, dec_val, tstart, dtype = fb.filterbank_parse(filename, loop_index, split)
 
             dtype=str(dtype)
 
@@ -837,171 +801,175 @@ def main(loop_index):
             num_chans = np.shape(data)[0]
             total_time_samples = np.shape(data)[1]
 
+    else:
+        # create simulated data
+        np.seterr(all='ignore')
+        sim_data = simulatedData(64, 2048*500, 12.5, 64e-6, 1700)
+        sim_data.add_bursts(10)
+        sim_data.add_rfi()
+        np.seterr(all='raise')
 
-        if chan_width < 0:
-            chan_width = abs(chan_width)
+        data = sim_data.data
+        num_chans = sim_data.nchan 
+        time_samp = sim_data.tsamp 
+        chan_width = sim_data.chan_width
+        ctr_freq = sim_data.hifreq - num_chans*chan_width
+        ra_string = "sim data"
+        dec_string= "sim data"
+        tstart = 0
+        total_time_samples = sim_data.nbins
+        dtype = '32'
+        sub_int_orig = 2048*time_samp
 
-
-
-
-        if maskfile:
-            # read in maskfile if it has been provided and set channels to ignore
-
-            mask = rfifind(maskfile)
-            dtint, mask_chan, mask_int = mask.read_mask()
-
-            global ignore
-
-            mask_chan = [str(chan) for chan in mask_chan]
-
-            ignore = ignore + mask_chan
-
-        #we use a standardized subintegration size of 2048 time bins to make processing of differently structured 
-        #data sets easier to accomplish. Thus set sub_int time to 2048*time_samp.
-        #We will later split up all data into sub integratons of 2048 time bins.
-
-        
-        sub_int = 2048*time_samp
-        burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
-
-        # #plotting routine for replotting pickled burst images. Only executes if plotfile is given as an argument
-        # if plotfile is not None:
-        #     burst_metadata = (time_samp, chan_width, ctr_freq, num_chans)
-
-        #     bursts = np.load(plotfile, allow_pickle=True)
-
-        #     root = tk.Tk()
-
-        #     root.title("FRB pulse find")
-
-        #     app = gui.Application(root,  bursts,  burst_metadata, outfilename, data)
-        #     app.mainloop()
-
-        #     return
+    if chan_width < 0:
+        chan_width = abs(chan_width)
 
 
-        #zero_padded_data = []
-
-        if dm != 0: 
-            print("\n Dedispersing data using DM = " + str(dm) + " ...")
-
-            if filename[-4:]=="fits":
-                all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), dtype=types[dtype])
-
-                for index, record in enumerate(data):
-                    all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
 
 
-                dedispersed_data = np.transpose(dedisperse(all_data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
+    if maskfile:
+        # read in maskfile if it has been provided and set channels to ignore
 
-            else:
-                dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
+        mask = rfifind(maskfile)
+        dtint, mask_chan, mask_int = mask.read_mask()
+
+        global ignore
+
+        mask_chan = [str(chan) for chan in mask_chan]
+
+        ignore = ignore + mask_chan
+
+    #we use a standardized subintegration size of 2048 time bins to make processing of differently structured 
+    #data sets easier to accomplish. Thus set sub_int time to 2048*time_samp.
+    #We will later split up all data into sub integratons of 2048 time bins.
+
+    
+    sub_int = 2048*time_samp
+    burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
+
+    # #plotting routine for replotting pickled burst images. Only executes if plotfile is given as an argument
+    # if plotfile is not None:
+    #     burst_metadata = (time_samp, chan_width, ctr_freq, num_chans)
+
+    #     bursts = np.load(plotfile, allow_pickle=True)
+
+    #     root = tk.Tk()
+
+    #     root.title("FRB pulse find")
+
+    #     app = gui.Application(root,  bursts,  burst_metadata, outfilename, data)
+    #     app.mainloop()
+
+    #     return
 
 
-            print("\n Dedispersion complete!")
+    #zero_padded_data = []
+
+    if dm != 0: 
+        print("\n Dedispersing data using DM = " + str(dm) + " ...")
+
+        if filename[-4:]=="fits":
+            all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), dtype=types[dtype])
+
+            for index, record in enumerate(data):
+                all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
+
+            dedispersed_data = np.transpose(dedisperse(all_data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
             del all_data
-            #zero_padded_data = pad_factor_data(dedispersed_data, num_chans)
+            del data
+        else:
+            dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
+            del data
 
-            print("\n Processing ACFs of data chunk " + str(loop_index + 1) + "...")
+        print("\n Dedispersion complete!")
 
 
 
-            acf_array = np.ma.ones((int(total_time_samples/2048), num_chans, 2048), dtype=np.float32)
-            means = []
+        print("\n Processing ACFs of data chunk " + str(loop_index + 1) + "...")
 
-            for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//2048)):
-                record = dedispersed_data[index*2048:(index+1)*2048,:]
-                process_acf(record, time_width, freq_width, time_samp, chan_width, num_chans, index, acf_array, means, types[dtype])
 
-            # for index, record in enumerate(tqdm(zero_padded_data[:int(total_time_samples/2048), :, :])):
 
-            #     process_acf(record, time_width, freq_width, time_samp, chan_width, num_chans, zero_padded_data, index, acf_array, means, types[dtype])
+        acf_array = np.ma.ones((int(total_time_samples/2048), num_chans, 2048), dtype=np.float32)
+        means = []
 
-            print("\n\n ...processing complete!\n")
+        for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//2048)):
+            record = dedispersed_data[index*2048:(index+1)*2048,:]
+            process_acf(record, time_samp, chan_width, num_chans, index, acf_array, types[dtype])
+
+
+
+        print("\n\n ...processing complete!\n")
+
+
+    else:
+
+
+        if filename[-4:]=="fits":
+            all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), dtype=types[dtype])
+
+            for index, record in enumerate(data):
+                all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
+
+            all_data = np.transpose(all_data)
+
 
 
         else:
+            #filterbank format
+
+            all_data = np.transpose(data)
+            print(np.shape(all_data))
 
 
-            if filename[-4:]=="fits":
-                all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), dtype=types[dtype])
-
-                for index, record in enumerate(data):
-                    all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
-
-                all_data = np.transpose(all_data)
-
-                #zero_padded_data = pad_factor_data(all_data, num_chans)
-
-            else:
-                #filterbank format
-
-                all_data = np.transpose(data)
-
-                #zero_padded_data = pad_factor_data(all_data, num_chans)
 
 
-            acf_array = np.ma.ones((int(total_time_samples/2048), num_chans, 2048), dtype=np.float32)
-            means = []            
+        acf_array = np.ma.ones((int(total_time_samples/2048), num_chans, 2048), dtype=np.float32)
+        means = []            
 
-            print("\n Processing ACFs of data chunk " + str(loop_index + 1) + "...")
+        print("\n Processing ACFs of data chunk " + str(loop_index + 1) + "...")
 
-            for index in tqdm(np.arange(np.shape(all_data)[0]//2048)):
-                record = all_data[index*2048:(index+1)*2048,:]
-                process_acf(record, time_width, freq_width, time_samp, chan_width, num_chans, index, acf_array, means, types[dtype])
+        for index in tqdm(np.arange(np.shape(all_data)[0]//2048)):
+            record = all_data[index*2048:(index+1)*2048,:]
+            process_acf(record, time_samp, chan_width, num_chans, index, acf_array, types[dtype])
 
-            # for index, record in enumerate(tqdm(zero_padded_data[:int(total_time_samples/2048), :, :])):
-
-            #     process_acf(record, time_width, freq_width, time_samp, chan_width, num_chans, zero_padded_data, index, acf_array, means, types[dtype])
-
-            print("\n\n ...processing complete!\n")
+        print("\n\n ...processing complete!\n")
 
     center_freq_lag = int(num_chans/2)
     center_time_lag = 1024
 
-    # # mask =  np.zeros((int(total_time_samples/2048), num_chans, 2048), dtype=np.uint8)
-    # mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
-    # mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
 
-    # acf_array.mask = np.zeros((int(total_time_samples/2048), num_chans, 2048), dtype=np.uint8)
-    # acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
-    # acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
 
-    min_t = 3
+    acf_array.mask = np.zeros((int(total_time_samples/2048), num_chans, 2048), dtype=np.uint8)
+    acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
+    acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
+
+    min_t = 1
     min_f = 3
 
-    t_wins = np.linspace(min_t, int(sub_int/2/time_samp), 10)
+    t_wins = np.logspace(np.log2(min_t), np.log2(int(sub_int/2/time_samp)), 10, base=2)
     f_wins = np.linspace(min_f, int(num_chans/2), 10)
 
 
 
-    locs = []
-    prune_cand_list = []
+
+    locs = set({})
+    cand_dict = {}
     acf_shape = np.shape(acf_array[0,:,:])
-    #print(acf_shape)
-    #acf_array = np.array(acf_array)
 
 
 
     np.seterr(all='ignore')
+
+    print("Calculating ACF means...")
     for i, time in enumerate(tqdm(t_wins)):
         for j, freq in enumerate(f_wins):
-            # means = []
 
-            # for k, acf in enumerate(acf_array):
-                # acf_shape = np.shape(acf)
-
-            # plt.imshow(acf_array[0,int(acf_shape[0]/2 - time): int(acf_shape[0]/2 + time), int(acf_shape[1]/2 - freq): int(acf_shape[1]/2 + freq)], aspect='auto')
-            # plt.show()
-
-            means = (acf_array[: , int(acf_shape[0]/2 - freq):center_freq_lag -1 , int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1,2)) + \
-                    acf_array[:, center_freq_lag + 1: int(acf_shape[0]/2 + freq) , int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1,2)))/2
-            #means = acf_array[:,int(acf_shape[0]/2 - time): int(acf_shape[0]/2 + time), int(acf_shape[1]/2 - freq): int(acf_shape[1]/2 + freq)].mean(axis=(1, 2))
+            means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq), int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1, 2))
 
 
-            #means = np.array(means)
 
-            median = np.median(means)
+
+            median = np.median(np.ma.getdata(means))
             med_dev = mad(means)
 
             acf_norm = (means - median)/med_dev
@@ -1011,57 +979,43 @@ def main(loop_index):
             threshold_locs = np.where(acf_norm >= thresh_sigma)[0]
 
             for loc in threshold_locs:
-                if dm!=0:
-                    candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
-                            np.transpose(dedispersed_data[loc*2048:(loc+1)*2048, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, True, (time, freq))
-                else:
-                    candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
-                            np.transpose(all_data[loc*2048:(loc+1)*2048, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, True, (time, freq))
+                if loc not in locs:
+                    if dm!=0:
 
-                if prune_candidates_modified(candidate, acf_norm, 10, sub_int):
-
-                    if loc not in locs:
-                        prune_cand_list.append(candidate)
-                        locs.append(loc)
+                        candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
+                                np.transpose(dedispersed_data[loc*2048:(loc+1)*2048, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, True, (time, freq))
                     else:
-                        index = locs.index(loc)
+                        candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
+                                np.transpose(all_data[loc*2048:(loc+1)*2048, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, True, (time, freq))
+
+                    cand_dict[loc] = candidate
+                    locs.add(loc)
+
+                else:
+
+                    cand_dict[loc].update_acf_windows(acf_norm[loc], time, freq)
 
 
-                        prune_cand_list[index].update_acf_windows(acf_norm[loc], time, freq)
+               #if prune_candidates_modified(candidate, acf_norm, 10, sub_int):
 
 
-    np.seterr(all='raise')       
-    prune_cand_list = prune_candidates_windows(prune_cand_list, num_chans, 2048, min_t, min_f)
+    cand_list = [cand_dict[key] for key in cand_dict]
+    np.seterr(all='raise')   
 
 
+    prune_cand_list = []
+    for candidate in cand_list:
+
+        sigma_max = candidate.sigma.index(max(candidate.sigma))
+        acf_window_where = candidate.acf_window[sigma_max]
+
+        max_t = acf_window_where[0]*time_samp
+
+        if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1):
+
+            prune_cand_list.append(candidate)
 
 
-    # means = np.array(means)
-
-
-
-    # median = np.median(means)
-    # med_dev = mad(means)
-
-
-    # acf_norm = (means - median)/med_dev
-
-
-    # plt.scatter(np.arange(len(acf_norm)), acf_norm)
-    # plt.show()
-
-    
-    # cand_list = []
-
-    # threshold_locs = np.where(abs(acf_norm) >= thresh_sigma)[0]
-
-
-    # for loc in threshold_locs:
-
-    #     cand_list.append(Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), np.transpose(zero_padded_data[loc, :, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, True))
-
-
-    # prune_cand_list = prune_candidates(cand_list, acf_norm, 10, sub_int)
     pruned_cand_sorted = sorted(prune_cand_list, reverse=True, key= lambda prune_candidate: max(prune_candidate.sigma))
 
 
@@ -1081,13 +1035,11 @@ def main(loop_index):
 
             if ip.d == True:
                 candidate.true_burst=False
-                #cands_to_pop.append(index)
             else:
                 candidate.gauss_fit = (ip.popt, ip.pcov)
                 candidate.selected_window = (ip.xdata1, ip.xdata2, ip.ydata1, ip.ydata2)
 
 
-        #pruned_cand_sorted = [cand for index, cand in enumerate(pruned_cand_sorted) if index not in cands_to_pop]
 
 
         for index, candidate in enumerate(pruned_cand_sorted):
@@ -1107,6 +1059,12 @@ def main(loop_index):
 
 
 
+    for cand in pruned_cand_sorted:
+        if filename[-4:]=="fits":
+            cand.location = np.round(cand.location*sub_int + chunk_size*(loop_index)*sub_int_orig, decimals=2)
+
+        else:
+            cand.location = np.round(cand.location*sub_int + loop_index*sub_int_orig, decimals=2)
 
 
     # gain = gain #K/Jy
@@ -1115,50 +1073,62 @@ def main(loop_index):
 
 
 
-    for index, candidate in enumerate(pruned_cand_sorted):
+    # for index, candidate in enumerate(pruned_cand_sorted):
 
-        median = np.median(np.mean(candidate.image[:num_chans,:], axis=0))
-        med_dev = mad(np.mean(candidate.image[:num_chans, :], axis=0))
+    #     median = np.median(np.mean(candidate.image[:num_chans,:], axis=0))
+    #     med_dev = mad(np.mean(candidate.image[:num_chans, :], axis=0))
 
-        jy_per_counts = sys_flux/median
-        pulse_profile = np.mean(candidate.image[:num_chans, :], axis=0)
+    #     jy_per_counts = sys_flux/median
+    #     pulse_profile = np.mean(candidate.image[:num_chans, :], axis=0)
 
-        normed_pulse_profile = pulse_profile - median
+    #     normed_pulse_profile = pulse_profile - median
 
-        sig_profile = np.where(normed_pulse_profile>=3*med_dev)
+    #     sig_profile = np.where(normed_pulse_profile>=3*med_dev)
 
-        length = np.shape(sig_profile)[1]
+    #     length = np.shape(sig_profile)[1]
 
-        try:
-            total_snr = (np.sum(pulse_profile[sig_profile]) - length*median)/(med_dev*np.sqrt(length))
-        except FloatingPointError:
-            total_snr=0
+    #     try:
+    #         total_snr = (np.sum(pulse_profile[sig_profile]) - length*median)/(med_dev*np.sqrt(length))
+    #     except FloatingPointError:
+    #         total_snr=0
 
 
-        total_fluence = np.around(1000*total_snr*sys_temp*np.sqrt(length*time_samp/(chan_width*num_chans*1e6))/(gain), decimals=2)
-        try:
-            candidate.snr = int(np.round(total_snr, decimals=0))
-            candidate.fluence = np.round(total_fluence, decimals=2)
-        except ValueError:
-            candidate.snr = 0
-        except FloatingPointError:
-            candidate.snr=0
-
-        if filename[-4:]=="fits":
-            candidate.location = np.round(candidate.location*sub_int + chunk_size*(loop_index)*sub_int_orig, decimals=2)
-        else:
-            candidate.location = np.round(candidate.location*sub_int + loop_index*sub_int_orig, decimals=2)
+    #     total_fluence = np.around(1000*total_snr*sys_temp*np.sqrt(length*time_samp/(chan_width*num_chans*1e6))/(gain), decimals=2)
+    #     try:
+    #         candidate.snr = int(np.round(total_snr, decimals=0))
+    #         candidate.fluence = np.round(total_fluence, decimals=2)
+    #     except ValueError:
+    #         candidate.snr = 0
+    #     except FloatingPointError:
+    #         candidate.snr=0
 
     burst_metadata = (time_samp, chan_width, ctr_freq, num_chans)
 
-    # if plot==1:
-    #     root = tk.Tk()
 
-    #     root.title("FRB pulse find")
 
-    #     app = gui.Application(root,  pruned_cand_sorted,  burst_metadata, outfilename, zero_padded_data, types[dtype])
-    #     app.mainloop()
+    if flag==1:
+        with open(outfilename + "_simulated_bursts.txt", "a") as f:
+            for index, loc in enumerate(sim_data.timeloc):
+                if index==0:
+                    f.write("# Location simulated burst (s), Peak Scale\n")
+                    f.write("{:0.2f}".format(loc) + "," + "{:0.2f}".format(sim_data.peak_snrs[index]) + "\n")
+                else:
+                    f.write("{:0.2f}".format(loc) + "," + "{:0.2f}".format(sim_data.peak_snrs[index]) + "\n")
 
+        with open(outfilename + "_bursts.txt", "a") as f:
+            for index, candidate in enumerate(pruned_cand_sorted):
+
+
+
+                has_window = 0
+                if (min_t, min_f) in candidate.acf_window:
+                    has_window=1
+
+                if index==0:
+                    f.write("# Location detected burst (s), ACF SNR, has min window\n")
+                    f.write("{:0.2f}".format(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + "{}".format(has_window) + "\n")
+                else:
+                    f.write("{:0.2f}".format(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + "{}".format(has_window) + "\n")                
 
 
     if len(pruned_cand_sorted) != 0:
@@ -1171,7 +1141,7 @@ def main(loop_index):
 if __name__=='__main__':
     parser = ap.ArgumentParser()
 
-    parser.add_argument("infile", help="Fits filename containing data.")
+    parser.add_argument("--infile", help="Fits filename containing data.")
     parser.add_argument("--sigma", help="Search for peaks in the acf above this threshold. Default = 10.", type=int, default=10)
     parser.add_argument("--d", help="Dispersion measure value to use for dedispersion. Default = 0. If zero, program assumes that the data is already dedispersed.", type=float, default=0)
     parser.add_argument("--plot", help="Use interactive plotting feature to view bursts. Default=0. Set to one for interactive plotting.", type=int, default=0)
@@ -1183,8 +1153,9 @@ if __name__=='__main__':
     parser.add_argument("--ignorechan", help="Frequency channels to ignore when processing.", type=str, nargs="+", default=None)
     parser.add_argument("--t", help="Range of time lags to take the mean of the acf in. Units of seconds.", type=float, default=0)
     parser.add_argument("--f", help="Range of frequency lags to take the mean of the acf in. Units of megahertz.", type=float, default=0)
-    parser.add_argument("--no_acf_calc", help="Do not calcualte acfs. Instead load in acfs from pickled file.", type=int, default=0)
+    parser.add_argument("--sim_data", help="Run ACF analysis on simulated data. Default=0: do not run simulated data.", type=int, default=0)
     parser.add_argument("--mask", help="PRESTO rfifind maskfile")
+    parser.add_argument("--prune", help="All candidates with max SNR occuring at time window above this value will be pruned. Default=10 ms", type=float, default=10)
     parser.add_argument("outfile", help="String to append to output files.", default='')
 
 
@@ -1205,9 +1176,12 @@ if __name__=='__main__':
     ignore = args.ignorechan
     time_width = args.t
     freq_width = args.f
-    flag = args.no_acf_calc
+    flag = args.sim_data
     maskfile = args.mask
+    prune_value = args.prune
 
+    if flag==1:
+        filename="dummy"
 
 
     if ignore is None:

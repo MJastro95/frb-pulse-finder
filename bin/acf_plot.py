@@ -20,6 +20,8 @@ from scipy.stats import median_absolute_deviation as mad
 
 from pulse_find import rfifind
 
+np.seterr(under="warn")
+
 class Candidate:
     def __init__(self, location, sigma, image, acf, fluence, metadata, snr):
         self.location = location
@@ -194,6 +196,9 @@ def main():
     ax3.scatter(t_widths, f_widths, c=snr)
     ax3.set_xlabel("Time window width (ms)", fontsize=12)
     ax3.set_ylabel("Frequency window width (MHz)", fontsize=10)
+    ax3.set_xlim((time_samp*1000, np.shape(acf)[1]*time_samp*1000/2 + time_samp*1000))
+    ax3.set_ylim((chan_width, num_chan*chan_width/2 + chan_width))
+    ax3.set_xscale('log')
 
 
     norm = mpl.colors.Normalize(vmin=min(snr), vmax=max(snr))
@@ -265,7 +270,10 @@ def main():
 
         axbottom2.plot(time_array, (narrow_band_mean - narrow_band_median)/narrow_band_med_dev, mfc='k', ms=1, mec='k', color='k')
 
-    axbottom2.set_xlabel("Time (ms)", fontsize=12)
+        axbottom2.set_xlabel("Time (ms)", fontsize=12)
+    else:
+
+        axbottom2.set_xlabel("Time (s)", fontsize=12)
     ax2.set_ylabel("Frequency (MHz)", fontsize=12)
 
     #scientific_notation = "{:e}".format(12300000)

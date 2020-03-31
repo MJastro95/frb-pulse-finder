@@ -3,9 +3,9 @@ import struct
 import matplotlib.pyplot as plt
 import os
 
+types = {'8':np.uint8, '16':np.uint16,'32':np.uint32, '64':np.uint64}
 
-
-def filterbank_parse(infile, loop_index, split, dtype):
+def filterbank_parse(infile, loop_index, split):
 	with open(infile, 'rb') as file:
 		fileContent = file.read(2048)
 
@@ -54,7 +54,7 @@ def filterbank_parse(infile, loop_index, split, dtype):
 		data = file.read(total_block_size)
 
 
-	proc_data = np.frombuffer(data, dtype=dtype)
+	proc_data = np.frombuffer(data, dtype=types[str(nbits_val)])
 
 	proc_data = np.reshape(proc_data, (spectra_per_chunk, nchans_val))
 	proc_data = np.transpose(proc_data)
