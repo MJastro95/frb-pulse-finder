@@ -374,7 +374,7 @@ def print_candidates(all_candidates):
 
         with open(outfilename + "_detected_bursts.txt", "a") as f:
             if index==0:
-                f.write("# Location (s), ACF SNR, Fluence")
+                f.write("# Location (s), ACF SNR, Fluence\n")
                 f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(candidate.fluence) + "\n")
             else:
                 f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(candidate.fluence) + "\n")                
@@ -403,7 +403,7 @@ def pad_factor_data(data, num_chans):
     zeros = np.zeros((num_of_zeros, num_chans), dtype=np.uint8)
 
     zero_padded_data = np.concatenate((data, zeros), axis=0)
-    zero_padded_data = np.reshape(zero_padded_data, (int(np.shape(zero_padded_data)[0]/2048), 2048, num_chans))
+    zero_padded_data = np.reshape(zero_padded_data, (int(np.shape(zero_padded_data)[0]/sub), sub, num_chans))
 
     return zero_padded_data
 
@@ -444,6 +444,7 @@ class interactivePlot:
         self.candidate = candidate
         self.cands_to_pop = []
         self.makePlot()
+        self.true_burst = False
 
 
     def makePlot(self):
@@ -671,6 +672,7 @@ class interactivePlot:
     def gaussPress(self, event):
         if event.key=='c':
             print("Fit confirmed!")
+            self.true_burst = True
 
             plt.close()
         elif event.key=='d':
@@ -774,7 +776,7 @@ def main(loop_index):
 
             dtype = str(dtype)
 
-            data = data[6000:,:,:,:,:]
+                #data = data[int(np.shape(data):,:,:,:,:]
 
             chunk_size = int(np.shape(data)[0]/split)
 
@@ -804,7 +806,7 @@ def main(loop_index):
     else:
         # create simulated data
         np.seterr(all='ignore')
-        sim_data = simulatedData(64, 2048*500, 12.5, 64e-6, 1700)
+        sim_data = simulatedData(64, sub*500, 12.5, 64e-6, 1700)
         sim_data.add_bursts(10)
         sim_data.add_rfi()
         np.seterr(all='raise')
@@ -819,7 +821,7 @@ def main(loop_index):
         tstart = 0
         total_time_samples = sim_data.nbins
         dtype = '32'
-        sub_int_orig = 2048*time_samp
+        sub_int_orig = sub*time_samp
 
     if chan_width < 0:
         chan_width = abs(chan_width)
@@ -839,12 +841,12 @@ def main(loop_index):
 
         ignore = ignore + mask_chan
 
-    #we use a standardized subintegration size of 2048 time bins to make processing of differently structured 
-    #data sets easier to accomplish. Thus set sub_int time to 2048*time_samp.
-    #We will later split up all data into sub integratons of 2048 time bins.
+    #we use a standardized subintegration size of sub time bins to make processing of differently structured 
+    #data sets easier to accomplish. Thus set sub_int time to sub*time_samp.
+    #We will later split up all data into sub integratons of sub time bins.
 
     
-    sub_int = 2048*time_samp
+    sub_int = sub*time_samp
     burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
 
     # #plotting routine for replotting pickled burst images. Only executes if plotfile is given as an argument
@@ -869,16 +871,26 @@ def main(loop_index):
         print("\n Dedispersing data using DM = " + str(dm) + " ...")
 
         if filename[-4:]=="fits":
+
             all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), dtype=types[dtype])
 
             for index, record in enumerate(data):
                 all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
 
-            dedispersed_data = np.transpose(dedisperse(all_data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
+            if interval is None:
+                dedispersed_data = np.transpose(dedisperse(all_data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
+            else:
+                dedispersed_data = np.transpose(dedisperse(all_data[:, int(np.shape(all_data)[1]*interval[0]): int(np.shape(all_data)[1]*interval[1])],\
+                        dm, ctr_freq, chan_width, time_samp, types[dtype]))
             del all_data
             del data
         else:
-            dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
+            if interval is None:
+                dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
+            else:
+                dedispersed_data = np.transpose(dedisperse(data[:, int(np.shape(data)[1]*interval[0]): int(np.shape(data)[1]*interval[1])],\
+                        dm, ctr_freq, chan_width, time_samp, types[dtype]))
+
             del data
 
         print("\n Dedispersion complete!")
@@ -889,11 +901,11 @@ def main(loop_index):
 
 
 
-        acf_array = np.ma.ones((int(total_time_samples/2048), num_chans, 2048), dtype=np.float32)
+        acf_array = np.ma.ones((int(total_time_samples/sub), num_chans, sub), dtype=np.float32)
         means = []
 
-        for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//2048)):
-            record = dedispersed_data[index*2048:(index+1)*2048,:]
+        for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//sub)):
+            record = dedispersed_data[index*sub:(index+1)*sub,:]
             process_acf(record, time_samp, chan_width, num_chans, index, acf_array, types[dtype])
 
 
@@ -923,13 +935,13 @@ def main(loop_index):
 
 
 
-        acf_array = np.ma.ones((int(total_time_samples/2048), num_chans, 2048), dtype=np.float32)
+        acf_array = np.ma.ones((int(total_time_samples/sub), num_chans, sub), dtype=np.float32)
         means = []            
 
         print("\n Processing ACFs of data chunk " + str(loop_index + 1) + "...")
 
-        for index in tqdm(np.arange(np.shape(all_data)[0]//2048)):
-            record = all_data[index*2048:(index+1)*2048,:]
+        for index in tqdm(np.arange(np.shape(all_data)[0]//sub)):
+            record = all_data[index*sub:(index+1)*sub,:]
             process_acf(record, time_samp, chan_width, num_chans, index, acf_array, types[dtype])
 
         print("\n\n ...processing complete!\n")
@@ -939,9 +951,9 @@ def main(loop_index):
 
 
 
-    acf_array.mask = np.zeros((int(total_time_samples/2048), num_chans, 2048), dtype=np.uint8)
-    acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
-    acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/2048),2048), dtype=np.uint8)
+    acf_array.mask = np.zeros((int(total_time_samples/sub), num_chans, sub), dtype=np.uint8)
+    acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/sub),sub), dtype=np.uint8)
+    acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/sub),sub), dtype=np.uint8)
 
     min_t = 1
     min_f = 3
@@ -964,6 +976,7 @@ def main(loop_index):
     for i, time in enumerate(tqdm(t_wins)):
         for j, freq in enumerate(f_wins):
 
+
             means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq), int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1, 2))
 
 
@@ -983,10 +996,10 @@ def main(loop_index):
                     if dm!=0:
 
                         candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
-                                np.transpose(dedispersed_data[loc*2048:(loc+1)*2048, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, True, (time, freq))
+                                np.transpose(dedispersed_data[loc*sub:(loc+1)*sub, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
                     else:
                         candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
-                                np.transpose(all_data[loc*2048:(loc+1)*2048, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, True, (time, freq))
+                                np.transpose(all_data[loc*sub:(loc+1)*sub, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
 
                     cand_dict[loc] = candidate
                     locs.add(loc)
@@ -1011,7 +1024,12 @@ def main(loop_index):
 
         max_t = acf_window_where[0]*time_samp
 
-        if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1):
+        t_windows = [window[0] for window in candidate.acf_window]
+        f_windows = [window[1] for window in candidate.acf_window]
+
+        min_f_window = min(f_windows)
+
+        if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1) and min_f_window<=5:
 
             prune_cand_list.append(candidate)
 
@@ -1032,6 +1050,9 @@ def main(loop_index):
                     cands_to_pop.append(i)
 
                 break
+
+            if ip.true_burst==True:
+                candidate.true_burst=True
 
             if ip.d == True:
                 candidate.true_burst=False
@@ -1156,6 +1177,8 @@ if __name__=='__main__':
     parser.add_argument("--sim_data", help="Run ACF analysis on simulated data. Default=0: do not run simulated data.", type=int, default=0)
     parser.add_argument("--mask", help="PRESTO rfifind maskfile")
     parser.add_argument("--prune", help="All candidates with max SNR occuring at time window above this value will be pruned. Default=10 ms", type=float, default=10)
+    parser.add_argument("--sub_int", help="Length of desired sub-integration in time bins. The data is split into chunks of this size in time before the ACF is calculated. Default=2048", type=int, default=2048)
+    parser.add_argument("--interval", help="Start and end time of data to process as fraction of observation length. Default is to process entire observation.)", nargs=2, type=float, default=None)
     parser.add_argument("outfile", help="String to append to output files.", default='')
 
 
@@ -1179,6 +1202,8 @@ if __name__=='__main__':
     flag = args.sim_data
     maskfile = args.mask
     prune_value = args.prune
+    sub = args.sub_int
+    interval = args.interval
 
     if flag==1:
         filename="dummy"

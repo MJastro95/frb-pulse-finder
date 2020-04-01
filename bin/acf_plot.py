@@ -109,7 +109,7 @@ def main():
     # parser.add_argument("--time", help="Sampling time of telescope in seconds", type=float)
     # parser.add_argument("--bw", help="Bandwidth of observation in MHz", type=float)
     # parser.add_argument("--chan", help="Number of frequency channels", type=int)
-    parser.add_argument("--bounds", help="Length of time axis to plot in time bins", type=int, default=2048)
+    parser.add_argument("--bounds", help="Length of time axis to plot in time bins", type=int, default=0)
     parser.add_argument("--fit", help="Type of model to fit to autocorrelation function. Either gaussian or lorentzian. Default value is empty string, which means don't fit.", default='')
     parser.add_argument("--p0", help="Initial guess for parameters to fit autocorrelation function.", type=float, nargs="+", default=None)
     parser.add_argument("--mask", help="PRESTO rfifind mask")
@@ -160,6 +160,9 @@ def main():
     bandwidth = chan_width*num_chan
 
     acf_shape = np.shape(acf)
+
+    if bounds==0:
+        bounds=acf_shape[1]
 
     axis1_center = int(acf_shape[0]/2)
     axis2_center = int(acf_shape[1]/2)
@@ -229,8 +232,8 @@ def main():
 
 
     if selected_window==0:
-        extent= [loc, loc + 2048*time_samp, ctr_freq - bandwidth/2, ctr_freq + bandwidth/2]
-        time_array = np.linspace(loc, loc + 2048*time_samp, 2048)
+        extent= [loc, loc + acf_shape[1]*time_samp, ctr_freq - bandwidth/2, ctr_freq + bandwidth/2]
+        time_array = np.linspace(loc, loc + acf_shape[1]*time_samp, acf_shape[1])
         ax2.text(4, height - 0.75, "Burst location: {:.2f}".format(loc) + " s", fontsize=12, transform=fig.dpi_scale_trans)
 
     else:
