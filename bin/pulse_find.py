@@ -349,13 +349,8 @@ def prune_candidates_windows(candidates, num_chans, num_samps, min_t, min_f):
 
 
 
-def print_candidates(all_candidates):
-    total_candidates = []
-    for cand_list in all_candidates:
-        for candidate in cand_list:
-            total_candidates.append(candidate)
+def print_candidates(total_candidates_sorted):
 
-    total_candidates_sorted = sorted(total_candidates, reverse=True, key= lambda total_candidates: max(total_candidates.sigma))
 
     print("**************************************************************************")
     print("**************************************************************************")
@@ -764,7 +759,7 @@ types = {'8':np.uint8, '16':np.uint16,'32':np.uint32, '64':np.uint64}
 #
 #
 
-def main(loop_index):
+def main():
 
     #read in fits data and parse for data
     #data is assumed to have structure of (subchunk, time, ~, freq, ~)
@@ -776,21 +771,14 @@ def main(loop_index):
 
             dtype = str(dtype)
 
-                #data = data[int(np.shape(data):,:,:,:,:]
 
-            chunk_size = int(np.shape(data)[0]/split)
-
-        #split data into smaller chunks for ease of processing
-            try:
-                data = data[chunk_size*(loop_index):chunk_size*(loop_index+1), :, :, :, :]
-            except IndexError:
-                data = data[chunk_size*(loop_index):, :, :, :, :]
 
             data_shape = np.shape(data)
+
             num_chans = data_shape[3]
-            total_time_samples = data_shape[0]*data_shape[1]
+            orig_time_samples = data_shape[0]*data_shape[1]
         else:
-            data, sub_int_orig, ctr_freq, chan_width, time_samp, ra_val, dec_val, tstart, dtype = fb.filterbank_parse(filename, loop_index, split)
+            data, sub_int_orig, ctr_freq, chan_width, time_samp, ra_val, dec_val, tstart, dtype = fb.filterbank_parse(filename, 0, 1)
 
             dtype=str(dtype)
 
@@ -801,7 +789,7 @@ def main(loop_index):
             dec_string = dec_val[:2] + ":" + dec_val[2:4] + ":" + "{:.2f}".format(float(dec_val[4:]))
 
             num_chans = np.shape(data)[0]
-            total_time_samples = np.shape(data)[1]
+            orig_time_samples = np.shape(data)[1]
 
     else:
         # create simulated data
@@ -849,23 +837,6 @@ def main(loop_index):
     sub_int = sub*time_samp
     burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
 
-    # #plotting routine for replotting pickled burst images. Only executes if plotfile is given as an argument
-    # if plotfile is not None:
-    #     burst_metadata = (time_samp, chan_width, ctr_freq, num_chans)
-
-    #     bursts = np.load(plotfile, allow_pickle=True)
-
-    #     root = tk.Tk()
-
-    #     root.title("FRB pulse find")
-
-    #     app = gui.Application(root,  bursts,  burst_metadata, outfilename, data)
-    #     app.mainloop()
-
-    #     return
-
-
-    #zero_padded_data = []
 
     if dm != 0: 
         print("\n Dedispersing data using DM = " + str(dm) + " ...")
@@ -882,6 +853,8 @@ def main(loop_index):
             else:
                 dedispersed_data = np.transpose(dedisperse(all_data[:, int(np.shape(all_data)[1]*interval[0]): int(np.shape(all_data)[1]*interval[1])],\
                         dm, ctr_freq, chan_width, time_samp, types[dtype]))
+
+            total_time_samples = np.shape(dedispersed_data)[0]
             del all_data
             del data
         else:
@@ -891,13 +864,14 @@ def main(loop_index):
                 dedispersed_data = np.transpose(dedisperse(data[:, int(np.shape(data)[1]*interval[0]): int(np.shape(data)[1]*interval[1])],\
                         dm, ctr_freq, chan_width, time_samp, types[dtype]))
 
+            total_time_samples = np.shape(dedispersed_data)[0]
             del data
 
         print("\n Dedispersion complete!")
 
 
 
-        print("\n Processing ACFs of data chunk " + str(loop_index + 1) + "...")
+        print("\n Processing ACFs of data chunk...")
 
 
 
@@ -930,7 +904,7 @@ def main(loop_index):
             #filterbank format
 
             all_data = np.transpose(data)
-            print(np.shape(all_data))
+
 
 
 
@@ -938,7 +912,7 @@ def main(loop_index):
         acf_array = np.ma.ones((int(total_time_samples/sub), num_chans, sub), dtype=np.float32)
         means = []            
 
-        print("\n Processing ACFs of data chunk " + str(loop_index + 1) + "...")
+        print("\n Processing ACFs of data chunk...")
 
         for index in tqdm(np.arange(np.shape(all_data)[0]//sub)):
             record = all_data[index*sub:(index+1)*sub,:]
@@ -954,6 +928,7 @@ def main(loop_index):
     acf_array.mask = np.zeros((int(total_time_samples/sub), num_chans, sub), dtype=np.uint8)
     acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/sub),sub), dtype=np.uint8)
     acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/sub),sub), dtype=np.uint8)
+    acf_array.mask[:, center_freq_lag+1, :] = np.ones((int(total_time_samples/sub),sub), dtype=np.uint8)
 
     min_t = 1
     min_f = 3
@@ -1009,7 +984,7 @@ def main(loop_index):
                     cand_dict[loc].update_acf_windows(acf_norm[loc], time, freq)
 
 
-               #if prune_candidates_modified(candidate, acf_norm, 10, sub_int):
+
 
 
     cand_list = [cand_dict[key] for key in cand_dict]
@@ -1081,11 +1056,15 @@ def main(loop_index):
 
 
     for cand in pruned_cand_sorted:
+        if interval is None:
+            offset = 0
+        else:
+            offset = orig_time_samples*interval[0]*time_samp
         if filename[-4:]=="fits":
-            cand.location = np.round(cand.location*sub_int + chunk_size*(loop_index)*sub_int_orig, decimals=2)
+            cand.location = np.round(cand.location*sub_int + offset , decimals=2)
 
         else:
-            cand.location = np.round(cand.location*sub_int + loop_index*sub_int_orig, decimals=2)
+            cand.location = np.round(cand.location*sub_int + offset, decimals=2)
 
 
     # gain = gain #K/Jy
@@ -1151,9 +1130,9 @@ def main(loop_index):
                 else:
                     f.write("{:0.2f}".format(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + "{}".format(has_window) + "\n")                
 
+    print_candidates(pruned_cand_sorted)
 
-    if len(pruned_cand_sorted) != 0:
-        np.save(outfilename + "_bursts_" + str(np.round(loop_index*sub_int_orig, decimals=2)) + "-" + str(np.round((loop_index+1)*sub_int_orig, decimals=2)), pruned_cand_sorted, allow_pickle=True)
+
 
     return 
 
@@ -1167,10 +1146,8 @@ if __name__=='__main__':
     parser.add_argument("--d", help="Dispersion measure value to use for dedispersion. Default = 0. If zero, program assumes that the data is already dedispersed.", type=float, default=0)
     parser.add_argument("--plot", help="Use interactive plotting feature to view bursts. Default=0. Set to one for interactive plotting.", type=int, default=0)
     parser.add_argument("--plotfile", help="Pickled burst data filename to regenerate plots of bursts.")
-    parser.add_argument("--split", help="Split data into this amount of chunks for processing. Helps for processing large files. Default=1", type=int, default=1)
     parser.add_argument("--gain", help="System gain of telescope. Used for calculating burst fluences.", type=float, default=1)
     parser.add_argument("--temp", help="System temperature of telescope. Used for calculating burst fluences.", type=float, default=0)
-    #parser.add_argument("--bits", help="Number of bits used to sample data. Default=32.", default='32')
     parser.add_argument("--ignorechan", help="Frequency channels to ignore when processing.", type=str, nargs="+", default=None)
     parser.add_argument("--t", help="Range of time lags to take the mean of the acf in. Units of seconds.", type=float, default=0)
     parser.add_argument("--f", help="Range of frequency lags to take the mean of the acf in. Units of megahertz.", type=float, default=0)
@@ -1192,10 +1169,8 @@ if __name__=='__main__':
     outfilename = args.outfile
     plot = args.plot
     plotfile = args.plotfile
-    split = args.split
     gain = args.gain
     sys_temp = args.temp
-    #dtype = args.bits
     ignore = args.ignorechan
     time_width = args.t
     freq_width = args.f
@@ -1215,26 +1190,9 @@ if __name__=='__main__':
 
 
 
-    # all_candidates = []
-    for i in np.arange(split):
-        main(i)
+    main()
 
 
-    #Because python is dumb with memory management, we have to save candidates from each loop iteration to disk to avoid
-    #running out of RAM. To print them to screen ranked by SNR, we now have to load them back in, and send them to 
-    #the print_candidates function
-
-    directory = '.'
-
-
-    all_candidates = []
-    for filename in os.listdir(directory):
-        if filename.startswith(outfilename + "_bursts_"):
-            candidates = np.load(filename, allow_pickle=True)
-            all_candidates.append(candidates)
-
-    
-    print_candidates(all_candidates)
 
 
 

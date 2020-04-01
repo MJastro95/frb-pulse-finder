@@ -157,6 +157,7 @@ def main():
     acf_window_max = acf_window[where_max]
 
 
+
     bandwidth = chan_width*num_chan
 
     acf_shape = np.shape(acf)
@@ -170,9 +171,9 @@ def main():
     acf[axis1_center, axis2_center] = (acf[axis1_center, axis2_center + 1] + acf[axis1_center, axis2_center-1] + acf[axis1_center-1, axis2_center] + acf[axis1_center+1, axis2_center])/4
 
 
-    acf.mask = np.zeros(acf_shape, dtype=np.uint8)
-    acf.mask[int(acf_shape[0]/2), :] = np.ones(acf_shape[1], dtype=np.uint8)
-    acf.mask[int(acf_shape[0]/2)-1, :] = np.ones(acf_shape[1], dtype=np.uint8)
+    # acf.mask = np.zeros(acf_shape, dtype=np.uint8)
+    # acf.mask[int(acf_shape[0]/2), :] = np.ones(acf_shape[1], dtype=np.uint8)
+    # acf.mask[int(acf_shape[0]/2)-1, :] = np.ones(acf_shape[1], dtype=np.uint8)
 
     acf_to_plot = acf[:, axis2_center - int(bounds/2): axis2_center + int(bounds/2)]
 
