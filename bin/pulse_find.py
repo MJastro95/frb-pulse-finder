@@ -122,7 +122,7 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
 
 
 def process_acf(record, time_samp, chan_width, num_chans, index, acf_array, dtype):
-    record = np.transpose(record)
+    record = np.transpose(record)#.copy()
 
 
     if len(ignore) != 0:
@@ -144,7 +144,7 @@ def process_acf(record, time_samp, chan_width, num_chans, index, acf_array, dtyp
 
 
 
-    record_ravel = record.copy().ravel()
+    record_ravel = record.ravel()
 
 
     record_nonzero=np.where(record.ravel()!=0)
@@ -749,7 +749,7 @@ class Burst:
 
 
 
-types = {'8':np.uint8, '16':np.uint16,'32':np.uint32, '64':np.uint64}
+types = {'8':np.uint8, '16':np.uint16,'32':np.float32, '64':np.float64}
 
 
 
@@ -816,7 +816,7 @@ def main():
 
 
 
-
+    mask_chan = []
     if maskfile:
         # read in maskfile if it has been provided and set channels to ignore
 
@@ -825,9 +825,43 @@ def main():
 
         global ignore
 
+
         mask_chan = [str(chan) for chan in mask_chan]
 
+        for val in ignore:
+            value = val.split(":")
+            if len(value)==1:
+                mask_chan.append(str(value[0]))
+            else:
+                values = list(np.arange(int(value[0]), int(value[1]), int(value[2])))
+
+                for num in values:
+                    mask_chan.append(str(numf))
+
+
         ignore = ignore + mask_chan
+
+        if len(mask_chan)/num_chans >= 0.5:
+            print("More than half the bandwidth is masked! Aborting...")
+            with open("aborted_runs.txt", "a") as f:
+                f.write(filename + " aborted because {:0.0f}".format(100*len(mask_chan)/num_chans) + " percent of channels are masked\n")
+
+            sys.exit()
+    else:
+        for val in ignore:
+            value = val.split(":")
+            if len(value)==1:
+                mask_chan.append(str(value[0]))
+            else:
+                values = list(np.arange(int(value[0]), int(value[1]), int(value[2])))
+
+                for num in values:
+                    mask_chan.append(str(num))
+
+
+    mask_chan = set(mask_chan)
+
+
 
     #we use a standardized subintegration size of sub time bins to make processing of differently structured 
     #data sets easier to accomplish. Thus set sub_int time to sub*time_samp.
@@ -969,12 +1003,20 @@ def main():
             for loc in threshold_locs:
                 if loc not in locs:
                     if dm!=0:
+                        burst = np.ma.array(np.transpose(dedispersed_data[loc*sub:(loc+1)*sub, :]))
+                        burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+                        for chan in mask_chan:
+                            burst[int(chan), :] = np.ones(np.shape(burst)[1], dtype=np.uint8)
+                        candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
+                                burst, acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
+                    else:
+                        burst = np.ma.array(np.transpose(all_data[loc*sub:(loc+1)*sub, :]))
+                        burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+                        for chan in mask_chan:
+                            burst[int(chan), :] = np.ones(np.shape(burst)[1], dtype=np.uint8)
 
                         candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
-                                np.transpose(dedispersed_data[loc*sub:(loc+1)*sub, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
-                    else:
-                        candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
-                                np.transpose(all_data[loc*sub:(loc+1)*sub, :]), acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
+                                burst, acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
 
                     cand_dict[loc] = candidate
                     locs.add(loc)
@@ -1026,8 +1068,8 @@ def main():
 
                 break
 
-            if ip.true_burst==True:
-                candidate.true_burst=True
+            # if ip.true_burst==True:
+            #     candidate.true_burst=True
 
             if ip.d == True:
                 candidate.true_burst=False
@@ -1042,12 +1084,15 @@ def main():
 
             if candidate.gauss_fit != 0:
 
+                candidate.true_burst=True
+
+                print(candidate.true_burst)
                 if dm!=0:
                     popt = candidate.gauss_fit[0]
                     center = int(popt[0]/time_samp)
 
                     candidate.image = np.transpose(dedispersed_data[center - int(0.02/time_samp): center + int(0.02/time_samp),:])
-                    print(np.shape(candidate.image))
+
                 else:
                     popt = candidate.gauss_fit[0]
                     center = int(popt[0]/time_samp)
@@ -1149,8 +1194,6 @@ if __name__=='__main__':
     parser.add_argument("--gain", help="System gain of telescope. Used for calculating burst fluences.", type=float, default=1)
     parser.add_argument("--temp", help="System temperature of telescope. Used for calculating burst fluences.", type=float, default=0)
     parser.add_argument("--ignorechan", help="Frequency channels to ignore when processing.", type=str, nargs="+", default=None)
-    parser.add_argument("--t", help="Range of time lags to take the mean of the acf in. Units of seconds.", type=float, default=0)
-    parser.add_argument("--f", help="Range of frequency lags to take the mean of the acf in. Units of megahertz.", type=float, default=0)
     parser.add_argument("--sim_data", help="Run ACF analysis on simulated data. Default=0: do not run simulated data.", type=int, default=0)
     parser.add_argument("--mask", help="PRESTO rfifind maskfile")
     parser.add_argument("--prune", help="All candidates with max SNR occuring at time window above this value will be pruned. Default=10 ms", type=float, default=10)
@@ -1172,8 +1215,6 @@ if __name__=='__main__':
     gain = args.gain
     sys_temp = args.temp
     ignore = args.ignorechan
-    time_width = args.t
-    freq_width = args.f
     flag = args.sim_data
     maskfile = args.mask
     prune_value = args.prune
@@ -1186,6 +1227,8 @@ if __name__=='__main__':
 
     if ignore is None:
         ignore = []
+
+
 
 
 
