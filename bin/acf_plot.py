@@ -247,7 +247,7 @@ def main():
 
         ax2.text(4, height - 0.75, "Burst location (Gaussian fit): {:.2f}".format(popt[0]) + " s", fontsize=12, transform=fig.dpi_scale_trans)
 
-    ax2.imshow(burst, aspect='auto', extent=extent)
+    ax2.imshow(burst, aspect='auto', extent=extent, interpolation='none')
     divider = make_axes_locatable(ax2)
 
     axbottom2 = divider.append_axes("bottom", size=1.2, pad=0.3, sharex=ax2)

@@ -1006,14 +1006,14 @@ def main():
                         burst = np.ma.array(np.transpose(dedispersed_data[loc*sub:(loc+1)*sub, :]))
                         burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
                         for chan in mask_chan:
-                            burst[int(chan), :] = np.ones(np.shape(burst)[1], dtype=np.uint8)
+                            burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
                         candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
                                 burst, acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
                     else:
                         burst = np.ma.array(np.transpose(all_data[loc*sub:(loc+1)*sub, :]))
                         burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
                         for chan in mask_chan:
-                            burst[int(chan), :] = np.ones(np.shape(burst)[1], dtype=np.uint8)
+                            burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
 
                         candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
                                 burst, acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
