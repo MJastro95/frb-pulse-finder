@@ -1046,9 +1046,10 @@ def main():
 
         min_f_window = min(f_windows)
 
-        if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1) and min_f_window<=5:
-
-            prune_cand_list.append(candidate)
+        #if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1) and min_f_window<=5:
+        if (max_t <= prune_value/1000):
+            if min_f_window<=5:
+                prune_cand_list.append(candidate)
 
 
     pruned_cand_sorted = sorted(prune_cand_list, reverse=True, key= lambda prune_candidate: max(prune_candidate.sigma))
