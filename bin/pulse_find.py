@@ -402,7 +402,26 @@ def pad_factor_data(data, num_chans):
 
     return zero_padded_data
 
+def preprocess(data, metadata, bandpass_avg, bandpass_std):
+    sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart = metadata
 
+    for index in np.arange(np.shape(data)[1]//sub):
+        chunk = data[:, index*sub:(index+1)*sub]
+        bandpass = chunk.mean(axis=1)
+
+        print(bandpass)
+
+        try:
+            bandpass_normed = (bandpass - bandpass_avg)/bandpass_std
+        except FloatingPointError:
+            bandpass_normed = bandpass - bandpass_avg
+
+        where = np.where(abs(bandpass_normed) >= 5)
+
+        chunk[where, :] = 0
+        data[:, index*sub:(index+1)*sub] = chunk
+
+    return
 
 
 #
@@ -738,7 +757,30 @@ class rfifind(object):
 
         return (self.dtint, self.mask_zap_chans, self.mask_zap_ints)
 
-
+    def get_bandpass(self, plot=False):
+        """
+        get_bandpass():
+            This routine returns a 'good' bandpass based on an average
+                of the average bandpasses, with the exception of the
+                intervals that were recommended for zapping in the mask.
+        """
+        ints = np.arange(self.nint)
+        badints = self.mask_zap_ints
+        goodints = set(ints) - set(badints)
+        goodints = np.asarray(list(goodints))
+        self.goodints = goodints
+        if not len(goodints):
+            print("WARNING!:  Cannot get bandpass because all intervals zapped.")
+            return 0.0
+        self.bandpass_avg = self.avg_stats[goodints,:].mean(0)
+        self.bandpass_std = self.std_stats[goodints,:].mean(0)
+        self.bandpass_pow = self.pow_stats[goodints,:].mean(0)
+        if plot:
+            plotxy(self.bandpass_avg, self.freqs, labx="Frequency (MHz)")
+            plotxy(self.bandpass_avg+self.bandpass_std, self.freqs, color="red")
+            plotxy(self.bandpass_avg-self.bandpass_std, self.freqs, color="red")
+            closeplot()
+        return self.bandpass_avg, self.bandpass_std
 
 
 class Burst:
@@ -814,6 +856,13 @@ def main():
     if chan_width < 0:
         chan_width = abs(chan_width)
 
+    #we use a standardized subintegration size of sub time bins to make processing of differently structured 
+    #data sets easier to accomplish. Thus set sub_int time to sub*time_samp.
+    #We will later split up all data into sub integratons of sub time bins.
+
+    
+    sub_int = sub*time_samp
+    burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
 
 
     mask_chan = []
@@ -822,11 +871,20 @@ def main():
 
         mask = rfifind(maskfile)
         dtint, mask_chan, mask_int = mask.read_mask()
+        bandpass_avg, bandpass_std = mask.get_bandpass()
+
+        bandpass_avg = np.flip(bandpass_avg)
+
+        bandpass_std = np.flip(bandpass_std)
+
+
+        ptsperint = mask.ptsperint
+
 
         global ignore
 
 
-        mask_chan = [str(chan) for chan in mask_chan]
+        mask_chan = [str(num_chans - chan - 1) for chan in mask_chan]
 
         for val in ignore:
             value = val.split(":")
@@ -863,14 +921,6 @@ def main():
 
 
 
-    #we use a standardized subintegration size of sub time bins to make processing of differently structured 
-    #data sets easier to accomplish. Thus set sub_int time to sub*time_samp.
-    #We will later split up all data into sub integratons of sub time bins.
-
-    
-    sub_int = sub*time_samp
-    burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
-
 
     if dm != 0: 
         print("\n Dedispersing data using DM = " + str(dm) + " ...")
@@ -882,6 +932,10 @@ def main():
             for index, record in enumerate(data):
                 all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
 
+            if maskfile:
+                preprocess(all_data, burst_metadata, bandpass_avg, bandpass_std)
+
+
             if interval is None:
                 dedispersed_data = np.transpose(dedisperse(all_data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
             else:
@@ -892,6 +946,11 @@ def main():
             del all_data
             del data
         else:
+
+            if maskfile:
+                preprocess(data, burst_metadata, bandpass_avg, bandpass_std)
+
+
             if interval is None:
                 dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
             else:
@@ -1047,9 +1106,9 @@ def main():
         min_f_window = min(f_windows)
 
         #if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1) and min_f_window<=5:
-        if (max_t <= prune_value/1000):
-            if min_f_window<=5:
-                prune_cand_list.append(candidate)
+        # if (max_t <= prune_value/1000):
+        #     if min_f_window<=5:
+        prune_cand_list.append(candidate)
 
 
     pruned_cand_sorted = sorted(prune_cand_list, reverse=True, key= lambda prune_candidate: max(prune_candidate.sigma))
