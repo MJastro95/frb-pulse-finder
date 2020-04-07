@@ -409,7 +409,6 @@ def preprocess(data, metadata, bandpass_avg, bandpass_std):
         chunk = data[:, index*sub:(index+1)*sub]
         bandpass = chunk.mean(axis=1)
 
-        print(bandpass)
 
         try:
             bandpass_normed = (bandpass - bandpass_avg)/bandpass_std
@@ -874,6 +873,7 @@ def main():
         bandpass_avg, bandpass_std = mask.get_bandpass()
 
         bandpass_avg = np.flip(bandpass_avg)
+        print(bandpass_avg)
 
         bandpass_std = np.flip(bandpass_std)
 
