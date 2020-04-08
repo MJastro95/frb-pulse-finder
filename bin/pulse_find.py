@@ -24,6 +24,7 @@ from scipy.stats import median_absolute_deviation as mad
 from scipy.stats import norm
 from tqdm import tqdm
 from scipy.optimize import curve_fit
+from scipy.signal import medfilt
 # import tkinter as tk
 #import pulse_find_gui as gui
 
@@ -402,22 +403,86 @@ def pad_factor_data(data, num_chans):
 
     return zero_padded_data
 
-def preprocess(data, metadata, bandpass_avg, bandpass_std):
+def preprocess(data, metadata, bandpass_std):#, bandpass_avg, bandpass_std):
     sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart = metadata
+
+    total_bandpassmean = np.zeros((np.shape(data)[0], np.shape(data)[1]//sub))
+    # total_bandpass_std = np.zeros((np.shape(data)[0], np.shape(data)[1]//sub))
+
+
+    data_mean = np.mean(data, axis=1)
+    data_std = np.std(data[:, :np.shape(data)[1]//10], axis=1)
+
+    # summed = np.zeros(num_chans)
+    # print(np.shape(data)[1]//sub)
+    # for index in np.arange(np.shape(data)[1]//sub):
+    #     chunk = np.transpose(data[:, index*sub:(index+1)*sub])
+
+    #     #print(chunk - data_mean)
+    #     if index==0:
+    #         print(chunk)
+    #         print(chunk - data_mean)
+    #         print((chunk-data_mean)**2)
+    #         print(np.sum((chunk-data_mean)**2, axis=0)/(np.shape(data)[1]//sub))
+
+    #     diff = (chunk - data_mean)**2
+
+    #     summed = summed + np.sum(diff, axis=0)/(np.shape(data)[1]//sub)
+
+
+    # data_std = np.sqrt(summed)
+
+    # print(data_std)
+
+
+    #for index in np.arange(np.shape(data)[1]//sub):
+    #     chunk = data[:, index*sub:(index+1)*sub]
+    #     bandpass_mean = chunk.mean(axis=1, dtype=np.float32)
+    #     # bandpass_std = chunk.std(axis=1, dtype=np.float32)
+    #     total_bandpassmean[:, index] = bandpass_mean
+    #     # total_bandpass_std[:, index] = bandpass_std
+
+    # bandpass_meanofmean = np.mean(total_bandpassmean, axis=1)
+    # bandpass_stdofmean = np.std(total_bandpassmean, axis=1, ddof=1)
+
+    # bandpass_meanofstd = np.mean(total_bandpass_std, axis=1)
+    # bandpass_stdofstd = np.std(total_bandpass_std, axis=1)
+
+    # print(bandpass_meanofstd, bandpass_stdofstd)
+
 
     for index in np.arange(np.shape(data)[1]//sub):
         chunk = data[:, index*sub:(index+1)*sub]
-        bandpass = chunk.mean(axis=1)
+        bandpass_mean = chunk.mean(axis=1, dtype=np.float32)
+        # if index==56 :
+        #     print(bandpass_mean)
+        #     print(data_mean)
+        #     #print(bandpass_stdofmean/(np.sqrt(np.shape(data)[1]//sub)))
+
+        #     print((bandpass_mean - data_mean))
+
+        #     print(bandpass_std)
+
+        #     print((bandpass_mean - data_mean)/(bandpass_std/np.sqrt(sub)))
+
+        #     plt.imshow(chunk, aspect='auto')
+        #     plt.show()
+        # bandpass_std = chunk.std(axis=1, dtype=np.float32)
+
+        where_std_zero = np.where(data_std==0)
+        data_std[where_std_zero] = 1
 
 
-        try:
-            bandpass_normed = (bandpass - bandpass_avg)/bandpass_std
-        except FloatingPointError:
-            bandpass_normed = bandpass - bandpass_avg
 
-        where = np.where(abs(bandpass_normed) >= 5)
+        bandpass_normed = (bandpass_mean - data_mean)/(data_std/np.sqrt(sub))
 
-        chunk[where, :] = 0
+            # bandpass_std_normed = (bandpass_std - bandpass_meanofstd)/bandpass_stdofstd
+
+        where_normed = np.where(abs(bandpass_normed) >= 5)
+        # where_std_normed = np.where(abs(bandpass_std_normed) >= 5)
+
+        chunk[where_normed, :] = 0
+        # chunk[where_std_normed, :] = 0
         data[:, index*sub:(index+1)*sub] = chunk
 
     return
@@ -701,7 +766,7 @@ class rfifind(object):
         #self.idata = infodata.infodata(self.basename+".inf")
         self.read_stats()
         # self.read_mask()
-        #self.get_bandpass()
+        # self.get_bandpass()
         # if len(self.goodints):
         #     self.get_median_bandpass()
         #     self.determine_padvals()
@@ -779,7 +844,7 @@ class rfifind(object):
             plotxy(self.bandpass_avg+self.bandpass_std, self.freqs, color="red")
             plotxy(self.bandpass_avg-self.bandpass_std, self.freqs, color="red")
             closeplot()
-        return self.bandpass_avg, self.bandpass_std
+        return self.bandpass_avg
 
 
 class Burst:
@@ -870,16 +935,18 @@ def main():
 
         mask = rfifind(maskfile)
         dtint, mask_chan, mask_int = mask.read_mask()
-        bandpass_avg, bandpass_std = mask.get_bandpass()
+        mask.get_bandpass()
+        # bandpass_avg, bandpass_std = mask.get_bandpass()
 
-        bandpass_avg = np.flip(bandpass_avg)
-        print(bandpass_avg)
+        bandpass_avg = np.flip(mask.bandpass_avg)
 
-        bandpass_std = np.flip(bandpass_std)
+        bandpass_std = np.flip(mask.bandpass_std)
+
+        # print(bandpass_avg)
+        # print(bandpass_std)
 
 
         ptsperint = mask.ptsperint
-
 
         global ignore
 
@@ -933,7 +1000,7 @@ def main():
                 all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
 
             if maskfile:
-                preprocess(all_data, burst_metadata, bandpass_avg, bandpass_std)
+                preprocess(all_data, burst_metadata, bandpass_std)#, bandpass_avg, bandpass_std)
 
 
             if interval is None:
@@ -948,7 +1015,7 @@ def main():
         else:
 
             if maskfile:
-                preprocess(data, burst_metadata, bandpass_avg, bandpass_std)
+                preprocess(data, burst_metadata, bandpass_std)#, bandpass_avg, bandpass_std)
 
 
             if interval is None:
@@ -1013,6 +1080,8 @@ def main():
 
         print("\n\n ...processing complete!\n")
 
+
+
     center_freq_lag = int(num_chans/2)
     center_time_lag = 1024
 
@@ -1064,13 +1133,19 @@ def main():
                     if dm!=0:
                         burst = np.ma.array(np.transpose(dedispersed_data[loc*sub:(loc+1)*sub, :]))
                         burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+                        burst = np.ma.masked_where(burst==0, burst)
+
                         for chan in mask_chan:
                             burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
+
                         candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
                                 burst, acf_array[loc], 0, burst_metadata, 0, 0, 0, False, (time, freq))
                     else:
                         burst = np.ma.array(np.transpose(all_data[loc*sub:(loc+1)*sub, :]))
                         burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+                        burst = np.ma.masked_where(burst==0, burst)
                         for chan in mask_chan:
                             burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
 
