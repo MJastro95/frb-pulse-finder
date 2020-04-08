@@ -263,116 +263,124 @@ def fits_parse(infile):
 
     return data['DATA'], sub_int, ctr_freq, chan_width, time_samp, ra_string, dec_string, tstart, dtype
 
-def prune_candidates(candidates, acfs, search_length, sub_int):
+# def prune_candidates(candidates, acfs, search_length, sub_int):
 
-    search_length = int(np.round(search_length/sub_int))
-    pruned_candidates = []
+#     search_length = int(np.round(search_length/sub_int))
+#     pruned_candidates = []
 
-    for index, candidate in enumerate(candidates):
-        #print(candidate.location, candidate.sigma)
+#     for index, candidate in enumerate(candidates):
+#         #print(candidate.location, candidate.sigma)
         
-        if candidate.location - search_length < 0:
-            acf_to_search = acfs[:candidate.location + search_length]
-        elif candidate.location + search_length > np.shape(acfs):
-            acf_to_search = acfs[candidate.location - search_length:] 
-        else:
-            acf_to_search = acfs[candidate.location- search_length: candidate.location + search_length]
+#         if candidate.location - search_length < 0:
+#             acf_to_search = acfs[:candidate.location + search_length]
+#         elif candidate.location + search_length > np.shape(acfs):
+#             acf_to_search = acfs[candidate.location - search_length:] 
+#         else:
+#             acf_to_search = acfs[candidate.location- search_length: candidate.location + search_length]
             
-        comp_result = abs(acf_to_search) >= thresh_sigma
-        num_result = np.count_nonzero(comp_result)
+#         comp_result = abs(acf_to_search) >= thresh_sigma
+#         num_result = np.count_nonzero(comp_result)
 
 
-        # summed = np.sum(candidate.image, axis=0)
-        # # print(np.shape(summed))
-        # median = np.median(summed)
-        # med_dev = mad(summed)
+#         # summed = np.sum(candidate.image, axis=0)
+#         # # print(np.shape(summed))
+#         # median = np.median(summed)
+#         # med_dev = mad(summed)
 
-        # norm = (summed - median)/med_dev
-
-
-
-        if (num_result <= 5): #and (np.amax(norm)>=thresh_sigma):
-            pruned_candidates.append(candidate)
+#         # norm = (summed - median)/med_dev
 
 
 
-    return pruned_candidates
+#         if (num_result <= 5): #and (np.amax(norm)>=thresh_sigma):
+#             pruned_candidates.append(candidate)
 
 
 
-def prune_candidates_modified(candidate, acfs, search_length, sub_int):
-    search_length = int(np.round(search_length/sub_int))
-
-    if candidate.location - search_length < 0:
-        acf_to_search = acfs[:candidate.location + search_length]
-    elif candidate.location + search_length > np.shape(acfs):
-        acf_to_search = acfs[candidate.location - search_length:] 
-    else:
-        acf_to_search = acfs[candidate.location- search_length: candidate.location + search_length]
-
-
-    comp_result = abs(acf_to_search) >= thresh_sigma
-    num_result = np.count_nonzero(comp_result)
-
-    if num_result <= 5:
-        return True
-    else:
-        return False
+#     return pruned_candidates
 
 
 
+# def prune_candidates_modified(candidate, acfs, search_length, sub_int):
+#     search_length = int(np.round(search_length/sub_int))
 
-def prune_candidates_windows(candidates, num_chans, num_samps, min_t, min_f):
+#     if candidate.location - search_length < 0:
+#         acf_to_search = acfs[:candidate.location + search_length]
+#     elif candidate.location + search_length > np.shape(acfs):
+#         acf_to_search = acfs[candidate.location - search_length:] 
+#     else:
+#         acf_to_search = acfs[candidate.location- search_length: candidate.location + search_length]
 
-    pruned_candidates = []
-    for candidate in candidates:
-        acf_window = candidate.acf_window
 
-        t_widths = []
-        f_widths = []
-        for window in acf_window:
-            t_widths.append(window[0])
-            f_widths.append(window[1])
+#     comp_result = abs(acf_to_search) >= thresh_sigma
+#     num_result = np.count_nonzero(comp_result)
 
-        min_t_widths = min(t_widths)
-        min_f_widths = min(f_widths)
-
-        if min_t_widths==min_t and min_f_widths==min_f:
-            pruned_candidates.append(candidate)
+#     if num_result <= 5:
+#         return True
+#     else:
+#         return False
 
 
 
 
-    return pruned_candidates
+# def prune_candidates_windows(candidates, num_chans, num_samps, min_t, min_f):
+
+#     pruned_candidates = []
+#     for candidate in candidates:
+#         acf_window = candidate.acf_window
+
+#         t_widths = []
+#         f_widths = []
+#         for window in acf_window:
+#             t_widths.append(window[0])
+#             f_widths.append(window[1])
+
+#         min_t_widths = min(t_widths)
+#         min_f_widths = min(f_widths)
+
+#         if min_t_widths==min_t and min_f_widths==min_f:
+#             pruned_candidates.append(candidate)
+
+
+
+
+#     return pruned_candidates
 
 
 
 
 
-def print_candidates(total_candidates_sorted):
+def print_candidates(total_candidates_sorted, burst_metadata):
 
-
-    print("**************************************************************************")
-    print("**************************************************************************")
-    print("************************                           ***********************")
-    print("************************ Detected burst properties ***********************")
-    print("************************                           ***********************")
-    print("**************************************************************************")
-    print("**************************************************************************\n")
-    print("**************************************************************************")
-    print("Burst location (s)            ACF SNR            Burst fluence (Jyms)  ")
-    print("**************************************************************************")
+    sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart = burst_metadata
+    print("**************************************************************************************************************************")
+    print("**************************************************************************************************************************")
+    print("********************************************                             *************************************************")
+    print("********************************************  Detected burst properties  *************************************************")
+    print("********************************************                             *************************************************")
+    print("**************************************************************************************************************************")
+    print("**************************************************************************************************************************\n")
+    print("**************************************************************************************************************************")
+    print("Burst location (s)                Max ACF SNR              Time Window Max SNR (ms)         Frequency Window Max SNR (MHz)")
+    print("**************************************************************************************************************************")
 
     for index, candidate in enumerate(total_candidates_sorted):
 
-        print(str(candidate.location) + print_string_sep(len(str(candidate.location)), 30) + "{:0.2f}".format(max(candidate.sigma)) + print_string_sep(len(str(max(candidate.sigma))), 21) + str(candidate.fluence))
+        sigma_max = candidate.sigma.index(max(candidate.sigma))
+        acf_window_where = candidate.acf_window[sigma_max]
+        t_window = np.round(acf_window_where[0]*time_samp*1000, decimals=2)
+        f_window = np.round(acf_window_where[1]*chan_width, decimals=2)
+        print(str(candidate.location) + print_string_sep(len(str(candidate.location)), 34) + "{:0.2f}".format(max(candidate.sigma)) + \
+            print_string_sep(len(str(np.round(max(candidate.sigma), decimals=2))), 25) + str(t_window) + print_string_sep(len(str(t_window)), 33) + \
+            str(f_window))
 
         with open(outfilename + "_detected_bursts.txt", "a") as f:
             if index==0:
-                f.write("# Location (s), ACF SNR, Fluence\n")
-                f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(candidate.fluence) + "\n")
+                f.write("# Location (s), Max ACF SNR, DM, Time Window (ms), Frequency Window (MHz)\n")
+                f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(dm) + ","\
+                    + str(t_window) + "," + str(f_window) + "\n")
             else:
-                f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(candidate.fluence) + "\n")                
+                f.write(str(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + str(dm) + "," \
+                    + str(t_window) + "," + str(f_window) + "\n")                
 
         np.save(str(outfilename) + "_" + str(np.around(candidate.location, decimals=2)) + "s_" + "burst", \
             (candidate.metadata, candidate.acf, candidate.location, candidate.image, candidate.sigma, \
@@ -380,8 +388,8 @@ def print_candidates(total_candidates_sorted):
         #np.save(str(outfilename) + "_image_" + str(np.around(candidate.location, decimals=2)) + "s_" + "burst", (candidate.metadata, candidate.location, candidate.image), allow_pickle=True)
 
 
-    print("**************************************************************************")
-    print("**************************************************************************\n")    
+    print("**************************************************************************************************************************")
+    print("**************************************************************************************************************************\n")    
 
 
     if len(total_candidates_sorted)!= 0:
@@ -390,17 +398,17 @@ def print_candidates(total_candidates_sorted):
     return 
 
 
-def pad_factor_data(data, num_chans):
+# def pad_factor_data(data, num_chans):
 
-    log_2 = int(np.ceil(np.log2(np.shape(data)[0])))
-    num_of_zeros = 2**log_2 - np.shape(data)[0]
+#     log_2 = int(np.ceil(np.log2(np.shape(data)[0])))
+#     num_of_zeros = 2**log_2 - np.shape(data)[0]
 
-    zeros = np.zeros((num_of_zeros, num_chans), dtype=np.uint8)
+#     zeros = np.zeros((num_of_zeros, num_chans), dtype=np.uint8)
 
-    zero_padded_data = np.concatenate((data, zeros), axis=0)
-    zero_padded_data = np.reshape(zero_padded_data, (int(np.shape(zero_padded_data)[0]/sub), sub, num_chans))
+#     zero_padded_data = np.concatenate((data, zeros), axis=0)
+#     zero_padded_data = np.reshape(zero_padded_data, (int(np.shape(zero_padded_data)[0]/sub), sub, num_chans))
 
-    return zero_padded_data
+#     return zero_padded_data
 
 
 
@@ -467,8 +475,8 @@ class interactivePlot:
         self.acf_window_max = self.acf_window[self.where_max]
 
         self.loc = self.candidate.location
-        width = 10
-        height = 5.63
+        width = 12
+        height = 6.756
         self.fig = plt.figure(figsize=(width, height), dpi=100)
         self.ax1 = self.fig.add_axes([0.1, 0.1, 0.8, 0.65])
         
@@ -826,7 +834,7 @@ def main():
         global ignore
 
 
-        mask_chan = [str(chan) for chan in mask_chan]
+        mask_chan = [str(num_chans - chan - 1) for chan in mask_chan]
 
         for val in ignore:
             value = val.split(":")
@@ -1005,6 +1013,8 @@ def main():
                     if dm!=0:
                         burst = np.ma.array(np.transpose(dedispersed_data[loc*sub:(loc+1)*sub, :]))
                         burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+                        burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
                         for chan in mask_chan:
                             burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
                         candidate = Candidate(loc, np.round(abs(acf_norm[loc]), decimals=2), \
@@ -1012,6 +1022,8 @@ def main():
                     else:
                         burst = np.ma.array(np.transpose(all_data[loc*sub:(loc+1)*sub, :]))
                         burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+                        burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
                         for chan in mask_chan:
                             burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
 
@@ -1087,17 +1099,33 @@ def main():
 
                 candidate.true_burst=True
 
-                print(candidate.true_burst)
+   
                 if dm!=0:
                     popt = candidate.gauss_fit[0]
                     center = int(popt[0]/time_samp)
 
-                    candidate.image = np.transpose(dedispersed_data[center - int(0.02/time_samp): center + int(0.02/time_samp),:])
+                    burst = np.ma.array(np.transpose(dedispersed_data[center - int(0.02/time_samp): center + int(0.02/time_samp),:]))
+                    burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+                    burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
+
+                    for chan in mask_chan:
+                        burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
+
+                    candidate.image = burst
 
                 else:
                     popt = candidate.gauss_fit[0]
                     center = int(popt[0]/time_samp)
-                    candidate.image = np.transpose(all_data[center - int(0.02/time_samp): center + int(0.02/time_samp),:])                
+
+                    burst = np.ma.array(np.transpose(all_data[center - int(0.02/time_samp): center + int(0.02/time_samp),:]) )
+                    burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+                    burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
+                    for chan in mask_chan:
+                        burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
+
+                    candidate.image = burst              
 
 
 
@@ -1148,7 +1176,7 @@ def main():
     #     except FloatingPointError:
     #         candidate.snr=0
 
-    burst_metadata = (time_samp, chan_width, ctr_freq, num_chans)
+    #burst_metadata = (time_samp, chan_width, ctr_freq, num_chans)
 
 
 
@@ -1176,7 +1204,7 @@ def main():
                 else:
                     f.write("{:0.2f}".format(candidate.location) + "," + "{:0.2f}".format(max(candidate.sigma)) + "," + "{}".format(has_window) + "\n")                
 
-    print_candidates(pruned_cand_sorted)
+    print_candidates(pruned_cand_sorted, burst_metadata)
 
 
 
