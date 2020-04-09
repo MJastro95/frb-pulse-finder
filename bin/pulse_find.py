@@ -403,87 +403,64 @@ def pad_factor_data(data, num_chans):
 
     return zero_padded_data
 
-def preprocess(data, metadata, bandpass_std):#, bandpass_avg, bandpass_std):
+def preprocess(data, metadata, bandpass_avg, bandpass_std):#, bandpass_avg, bandpass_std):
     sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart = metadata
 
-    total_bandpassmean = np.zeros((np.shape(data)[0], np.shape(data)[1]//sub))
+    # total_bandpassmean = np.zeros((np.shape(data)[0], np.shape(data)[1]//sub))
     # total_bandpass_std = np.zeros((np.shape(data)[0], np.shape(data)[1]//sub))
 
 
-    data_mean = np.mean(data, axis=1)
-    data_std = np.std(data[:, :np.shape(data)[1]//10], axis=1)
+    data_mean = np.mean(data, axis=0)
 
-    # summed = np.zeros(num_chans)
-    # print(np.shape(data)[1]//sub)
-    # for index in np.arange(np.shape(data)[1]//sub):
-    #     chunk = np.transpose(data[:, index*sub:(index+1)*sub])
+    data_mean[np.where(data_mean==0)] = 1
 
-    #     #print(chunk - data_mean)
-    #     if index==0:
-    #         print(chunk)
-    #         print(chunk - data_mean)
-    #         print((chunk-data_mean)**2)
-    #         print(np.sum((chunk-data_mean)**2, axis=0)/(np.shape(data)[1]//sub))
+    data_std = np.zeros(num_chans)
 
-    #     diff = (chunk - data_mean)**2
+    # if data standard deviation is taken directly on entire dataset using np.std
+    # a huge memory leak occurs. Therefore use this hack by finding std of each chunk
+    # to build total std
 
-    #     summed = summed + np.sum(diff, axis=0)/(np.shape(data)[1]//sub)
+    for index in np.arange(10):
+
+        data_std = data_std + (np.sqrt(np.shape(data)[0]//10)/np.sqrt(np.shape(data)[0]))*np.std(data[index*np.shape(data)[1]//10:(index+1)*np.shape(data)[1]//10, :], axis=0)
 
 
-    # data_std = np.sqrt(summed)
+    #print(data_std)
+    data_std[np.where(data_std==0)] = 1
+    bandpass_avg[np.where(bandpass_avg==0)] = 1
 
-    # print(data_std)
+    # print("start")
+    # data =  data/bandpass_avg
+    # print("end")
+    # bandpass_corrected_data = (data - (data_mean/data_std))/(data_std*np.sqrt(sub)/data_mean)
 
+    for index in np.arange(np.shape(data)[0]//(sub)):
 
-    #for index in np.arange(np.shape(data)[1]//sub):
-    #     chunk = data[:, index*sub:(index+1)*sub]
-    #     bandpass_mean = chunk.mean(axis=1, dtype=np.float32)
-    #     # bandpass_std = chunk.std(axis=1, dtype=np.float32)
-    #     total_bandpassmean[:, index] = bandpass_mean
-    #     # total_bandpass_std[:, index] = bandpass_std
-
-    # bandpass_meanofmean = np.mean(total_bandpassmean, axis=1)
-    # bandpass_stdofmean = np.std(total_bandpassmean, axis=1, ddof=1)
-
-    # bandpass_meanofstd = np.mean(total_bandpass_std, axis=1)
-    # bandpass_stdofstd = np.std(total_bandpass_std, axis=1)
-
-    # print(bandpass_meanofstd, bandpass_stdofstd)
+        chunk = data[index*sub:(index+1)*sub, :]
 
 
-    for index in np.arange(np.shape(data)[1]//sub):
-        chunk = data[:, index*sub:(index+1)*sub]
-        bandpass_mean = chunk.mean(axis=1, dtype=np.float32)
-        # if index==56 :
-        #     print(bandpass_mean)
-        #     print(data_mean)
-        #     #print(bandpass_stdofmean/(np.sqrt(np.shape(data)[1]//sub)))
+        bandpass_mean = chunk.mean(axis=0, dtype=np.float32)
 
-        #     print((bandpass_mean - data_mean))
+        bandpass_mean = bandpass_mean/bandpass_avg
 
-        #     print(bandpass_std)
+        bandpass_normed = (bandpass_mean - data_mean/bandpass_avg)/(data_std/(bandpass_avg*np.sqrt(sub)))
 
-        #     print((bandpass_mean - data_mean)/(bandpass_std/np.sqrt(sub)))
 
-        #     plt.imshow(chunk, aspect='auto')
+
+        # if index==12299:
+        #     print(bandpass_normed)
+               
+        #     plt.imshow(np.transpose(chunk), aspect='auto')
         #     plt.show()
-        # bandpass_std = chunk.std(axis=1, dtype=np.float32)
-
-        where_std_zero = np.where(data_std==0)
-        data_std[where_std_zero] = 1
-
-
-
-        bandpass_normed = (bandpass_mean - data_mean)/(data_std/np.sqrt(sub))
 
             # bandpass_std_normed = (bandpass_std - bandpass_meanofstd)/bandpass_stdofstd
 
         where_normed = np.where(abs(bandpass_normed) >= 5)
         # where_std_normed = np.where(abs(bandpass_std_normed) >= 5)
 
-        chunk[where_normed, :] = 0
+        chunk[:, where_normed] = 0
         # chunk[where_std_normed, :] = 0
-        data[:, index*sub:(index+1)*sub] = chunk
+        data[index*sub:(index+1)*sub, :] = chunk
 
     return
 
@@ -961,7 +938,7 @@ def main():
                 values = list(np.arange(int(value[0]), int(value[1]), int(value[2])))
 
                 for num in values:
-                    mask_chan.append(str(numf))
+                    mask_chan.append(str(num))
 
 
         ignore = ignore + mask_chan
@@ -990,7 +967,7 @@ def main():
 
 
     if dm != 0: 
-        print("\n Dedispersing data using DM = " + str(dm) + " ...")
+
 
         if filename[-4:]=="fits":
 
@@ -999,10 +976,14 @@ def main():
             for index, record in enumerate(data):
                 all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
 
+
+            print("\nPreprocessing data...")
             if maskfile:
-                preprocess(all_data, burst_metadata, bandpass_std)#, bandpass_avg, bandpass_std)
+                preprocess(np.transpose(all_data), burst_metadata, bandpass_avg, bandpass_std)#, bandpass_avg, bandpass_std)
 
 
+            print("\nPreprocessing complete!")
+            print("\n Dedispersing data using DM = " + str(dm) + " ...")
             if interval is None:
                 dedispersed_data = np.transpose(dedisperse(all_data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
             else:
@@ -1013,11 +994,13 @@ def main():
             del all_data
             del data
         else:
-
+            print("\nPreprocessing data...")
             if maskfile:
-                preprocess(data, burst_metadata, bandpass_std)#, bandpass_avg, bandpass_std)
+                preprocess(data, burst_metadata, bandpass_avg, bandpass_std)#, bandpass_avg, bandpass_std)
+            print("\nPreprocessing complete!")
 
 
+            print("\n Dedispersing data using DM = " + str(dm) + " ...")
             if interval is None:
                 dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
             else:
@@ -1031,7 +1014,7 @@ def main():
 
 
 
-        print("\n Processing ACFs of data chunk...")
+        print("\n Processing ACFs of each data chunk...")
 
 
 
@@ -1072,7 +1055,7 @@ def main():
         acf_array = np.ma.ones((int(total_time_samples/sub), num_chans, sub), dtype=np.float32)
         means = []            
 
-        print("\n Processing ACFs of data chunk...")
+        print("\n Processing ACFs of each data chunk...")
 
         for index in tqdm(np.arange(np.shape(all_data)[0]//sub)):
             record = all_data[index*sub:(index+1)*sub,:]
@@ -1181,9 +1164,9 @@ def main():
         min_f_window = min(f_windows)
 
         #if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1) and min_f_window<=5:
-        # if (max_t <= prune_value/1000):
-        #     if min_f_window<=5:
-        prune_cand_list.append(candidate)
+        if (max_t <= prune_value/1000):
+            if min_f_window<=5:
+                prune_cand_list.append(candidate)
 
 
     pruned_cand_sorted = sorted(prune_cand_list, reverse=True, key= lambda prune_candidate: max(prune_candidate.sigma))
