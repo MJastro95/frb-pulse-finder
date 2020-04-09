@@ -509,8 +509,8 @@ class interactivePlot:
         self.ax1.text(4.5, height - 0.75, "Total Bandwidth: {:.0f}".format(bandwidth) + " MHz", fontsize=12, transform=self.fig.dpi_scale_trans)
         self.ax1.text(4.5, height - 1, "Dispersion Measure: {:.2f}".format(dm) + " pc cm$^{-3}$", fontsize=12, transform=self.fig.dpi_scale_trans)
         self.ax1.text(4.5, height - 1.25, "SNR of ACF: {:.2f}".format(max(sigma)), fontsize=12, transform=self.fig.dpi_scale_trans)
-        self.ax1.text(8.5, height - 0.5, "Time window width: {:.2f}".format(2*self.acf_window_max[0]*time_samp*1000) + " ms", fontsize=12, transform=self.fig.dpi_scale_trans)
-        self.ax1.text(8.5, height - 0.75, "Frequency window width: {:.2f}".format(2*self.acf_window_max[1]*chan_width) + " MHz", fontsize=12, transform=self.fig.dpi_scale_trans)
+        self.ax1.text(8.5, height - 0.5, "Time window width: {:.2f}".format(self.acf_window_max[0]*time_samp*1000) + " ms", fontsize=12, transform=self.fig.dpi_scale_trans)
+        self.ax1.text(8.5, height - 0.75, "Frequency window width: {:.2f}".format(self.acf_window_max[1]*chan_width) + " MHz", fontsize=12, transform=self.fig.dpi_scale_trans)
 
         self.cid = self.fig.canvas.mpl_connect('button_press_event', self.onpress)
         self.crel = self.fig.canvas.mpl_connect('button_release_event', self.onrel)
@@ -885,10 +885,16 @@ def main():
 
         if filename[-4:]=="fits":
 
+
             all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), dtype=types[dtype])
 
             for index, record in enumerate(data):
                 all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
+
+            if zero_dm_filt:
+                data_mean = np.mean(data, axis=0)
+                data = data - data_mean                
+
 
             if interval is None:
                 dedispersed_data = np.transpose(dedisperse(all_data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
@@ -900,6 +906,12 @@ def main():
             del all_data
             del data
         else:
+            
+            if zero_dm_filt:
+
+                data_mean = np.mean(data, axis=0)
+                data = data - data_mean
+
             if interval is None:
                 dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, chan_width, time_samp, types[dtype]))
             else:
@@ -994,7 +1006,8 @@ def main():
         for j, freq in enumerate(f_wins):
 
 
-            means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq), int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1, 2))
+            means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq), \
+            int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1, 2))
 
 
 
@@ -1059,9 +1072,9 @@ def main():
         min_f_window = min(f_windows)
 
         #if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1) and min_f_window<=5:
-        if (max_t <= prune_value/1000):
-            if min_f_window<=5:
-                prune_cand_list.append(candidate)
+        # if (max_t <= prune_value/1000):
+        #     if min_f_window<=5:
+        prune_cand_list.append(candidate)
 
 
     pruned_cand_sorted = sorted(prune_cand_list, reverse=True, key= lambda prune_candidate: max(prune_candidate.sigma))
@@ -1228,8 +1241,8 @@ if __name__=='__main__':
     parser.add_argument("--prune", help="All candidates with max SNR occuring at time window above this value will be pruned. Default=10 ms", type=float, default=10)
     parser.add_argument("--sub_int", help="Length of desired sub-integration in time bins. The data is split into chunks of this size in time before the ACF is calculated. Default=2048", type=int, default=2048)
     parser.add_argument("--interval", help="Start and end time of data to process as fraction of observation length. Default is to process entire observation.)", nargs=2, type=float, default=None)
+    parser.add_argument("--zero_dm_filt", help="Use a zero DM filter to remove broadband RFI in the dispersed data. Default=0: do not use zero DM filter.", type=int, default=0)
     parser.add_argument("outfile", help="String to append to output files.", default='')
-
 
 
     args = parser.parse_args()
@@ -1249,6 +1262,7 @@ if __name__=='__main__':
     prune_value = args.prune
     sub = args.sub_int
     interval = args.interval
+    zero_dm_filt = args.zero_dm_filt
 
     if flag==1:
         filename="dummy"
