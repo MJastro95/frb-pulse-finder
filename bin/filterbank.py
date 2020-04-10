@@ -54,7 +54,7 @@ def filterbank_parse(infile, loop_index, split):
 		data = file.read(total_block_size)
 
 
-	proc_data = np.frombuffer(data, dtype=types[str(nbits_val)])
+	proc_data = np.fromstring(data, dtype=types[str(nbits_val)])
 
 	proc_data = np.reshape(proc_data, (spectra_per_chunk, nchans_val))
 	proc_data = np.transpose(proc_data)
