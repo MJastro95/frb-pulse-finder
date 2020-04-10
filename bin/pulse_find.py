@@ -933,6 +933,25 @@ def main():
 
 
         ptsperint = mask.ptsperint
+        subperint = int(np.ceil(ptsperint/sub))
+
+        if interval is None:
+            offset = 0
+        else:
+            offset = orig_time_samples*interval[0]*time_samp
+
+        acfs_to_mask = []
+        for i in mask_int:
+            pts = i*ptsperint
+            start = int(np.floor(pts/sub)) - int(np.floor((offset/time_samp)/sub))
+
+            if start>=0:
+                rng = list(range(start, start+subperint))
+                acfs_to_mask = acfs_to_mask + rng
+
+
+        acfs_to_mask = set(acfs_to_mask)
+
 
         global ignore
 
@@ -957,7 +976,11 @@ def main():
             with open("aborted_runs.txt", "a") as f:
                 f.write(filename + " aborted because {:0.0f}".format(100*len(mask_chan)/num_chans) + " percent of channels are masked\n")
 
+
+
             sys.exit()
+
+
     else:
         for val in ignore:
             value = val.split(":")
@@ -1125,9 +1148,15 @@ def main():
             int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1, 2))
 
 
+            means.mask = np.zeros(np.shape(means))
+            for acf in acfs_to_mask:
+                if acf<=np.shape(means)[0]:
+                    means.mask[acf] = 1
 
 
-            median = np.median(np.ma.getdata(means))
+
+
+            median = np.ma.median(means)
             med_dev = mad(means)
 
             acf_norm = (means - median)/med_dev
@@ -1390,6 +1419,8 @@ if __name__=='__main__':
     sub = args.sub_int
     interval = args.interval
     zero_dm_filt = args.zero_dm_filt
+
+
 
     if flag==1:
         filename="dummy"
