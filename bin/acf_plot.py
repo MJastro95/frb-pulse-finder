@@ -2,6 +2,8 @@
 
 
 import numpy as np 
+import matplotlib as mpl
+mpl.use("TkAgg")
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import argparse as ap 
@@ -69,12 +71,14 @@ def normal_fit(x, a, mean, sigma):
     return a*norm.pdf(x, loc=mean, scale=sigma)
 
 
-def equations_to_solve(input_tuple, sigmax, sigmay, rho):
+def equations_to_solve(input_tuple, sigmax, sigmay, rho, const):
     alpha, a, b = input_tuple
 
-    equation_1 = (np.cos(alpha)**2)/(a**2) + (np.sin(alpha)**2)/(b**2) - (1/((1 - (rho**2))*(sigmax**2)))
-    equation_2 = np.cos(alpha)*np.sin(alpha)*((1/(a**2)) - (1/(b**2))) + (rho/(sigmax*sigmay))
-    equation_3 = (np.sin(alpha)/a)**2 + (np.cos(alpha)/b)**2 - (1/((sigmay**2)*(1 - (rho**2))))
+    const = np.log(const)
+
+    equation_1 = (np.cos(alpha)**2)/(a**2) + (np.sin(alpha)**2)/(b**2) + (1/(2*const*(1 - (rho**2))*(sigmax**2)))
+    equation_2 = np.cos(alpha)*np.sin(alpha)*((1/(a**2)) - (1/(b**2))) - (rho/(const*(1 - (rho**2))*sigmax*sigmay))
+    equation_3 = (np.sin(alpha)/a)**2 + (np.cos(alpha)/b)**2 + (1/(2*const*(sigmay**2)*(1 - (rho**2))))
     return (equation_1, equation_2, equation_3)
 
 def equations_to_solve_lorentz(input_tuple, a, b, c, d):
@@ -176,6 +180,7 @@ def main():
     # acf.mask[int(acf_shape[0]/2)-1, :] = np.ones(acf_shape[1], dtype=np.uint8)
 
     acf_to_plot = acf[:, axis2_center - int(bounds/2): axis2_center + int(bounds/2)]
+
 
     extent = [-bounds*time_samp*1000/2, bounds*time_samp*1000/2, -bandwidth/2, bandwidth/2]
 
@@ -331,15 +336,17 @@ def main():
             sigma_y = popt[3]
             rho = popt[4]
 
-            print(popt)
+            const = popt[5]/2
 
-            result= least_squares(equations_to_solve, (np.pi/2, 1, 1), bounds=((0, -np.inf, -np.inf), (2*np.pi, np.inf, np.inf)), args=(sigma_x, sigma_y, rho))
+            # print(popt)
+
+            result= least_squares(equations_to_solve, (np.pi/2, 1, 1), bounds=((0, -np.inf, -np.inf), (2*np.pi, np.inf, np.inf)), args=(sigma_x, sigma_y, rho, const))
 
             alpha = result.x[0] - np.pi/2
-            print(alpha)
+            # print(alpha)
 
             slope = -np.round(1/(np.tan(alpha)))
-            print("The slope is: " + str(slope) + " MHz/ms")
+            # print("The slope is: " + str(slope) + " MHz/ms")
 
 
 

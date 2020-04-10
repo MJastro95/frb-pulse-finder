@@ -184,7 +184,6 @@ def process_acf(record, time_samp, chan_width, num_chans, index, acf_array, dtyp
         record = np.reshape(record_ravel, (np.shape(record)[0], np.shape(record)[1]))
 
 
-
     median = np.median(record, axis=1)
     med_dev = mad(record, axis=1)
 
@@ -194,6 +193,7 @@ def process_acf(record, time_samp, chan_width, num_chans, index, acf_array, dtyp
         bandpass_corr_record = np.zeros(np.shape(record))
 
     acf_array[index, :, :] = np.ma.array(np.array(auto_corr2d_fft(bandpass_corr_record, np.shape(record)[1], dtype)[0]))
+   
 
 
 
@@ -467,6 +467,7 @@ def preprocess(data, metadata, bandpass_avg, bandpass_std):#, bandpass_avg, band
         # where_std_normed = np.where(abs(bandpass_std_normed) >= 5)
 
         chunk[:, where_normed] = 0
+
         # chunk[where_std_normed, :] = 0
         data[index*sub:(index+1)*sub, :] = chunk
 
@@ -1018,7 +1019,7 @@ def main():
 
             print("\nPreprocessing data...")
             if maskfile:
-                preprocess(data, burst_metadata, bandpass_avg, bandpass_std)#, bandpass_avg, bandpass_std)
+                preprocess(np.transpose(data), burst_metadata, bandpass_avg, bandpass_std)#, bandpass_avg, bandpass_std)
             print("\nPreprocessing complete!")
 
 
@@ -1230,9 +1231,14 @@ def main():
 
                 candidate.true_burst=True
 
-   
+                if interval is None:
+                    offset = 0
+                else:
+                    offset = orig_time_samples*interval[0]*time_samp
+           
                 if dm!=0:
                     popt = candidate.gauss_fit[0]
+                    popt[0] = popt[0] + offset
                     center = int(popt[0]/time_samp)
 
                     burst = np.ma.array(np.transpose(dedispersed_data[center - int(0.02/time_samp): center + int(0.02/time_samp),:]))
@@ -1247,6 +1253,8 @@ def main():
 
                 else:
                     popt = candidate.gauss_fit[0]
+
+                    popt[0] = popt[0] + offset
                     center = int(popt[0]/time_samp)
 
                     burst = np.ma.array(np.transpose(all_data[center - int(0.02/time_samp): center + int(0.02/time_samp),:]) )
@@ -1265,6 +1273,7 @@ def main():
             offset = 0
         else:
             offset = orig_time_samples*interval[0]*time_samp
+
         if filename[-4:]=="fits":
             cand.location = np.round(cand.location*sub_int + offset , decimals=2)
 
