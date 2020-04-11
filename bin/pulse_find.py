@@ -264,91 +264,6 @@ def fits_parse(infile):
 
     return data['DATA'], sub_int, ctr_freq, chan_width, time_samp, ra_string, dec_string, tstart, dtype
 
-# def prune_candidates(candidates, acfs, search_length, sub_int):
-
-#     search_length = int(np.round(search_length/sub_int))
-#     pruned_candidates = []
-
-#     for index, candidate in enumerate(candidates):
-#         #print(candidate.location, candidate.sigma)
-        
-#         if candidate.location - search_length < 0:
-#             acf_to_search = acfs[:candidate.location + search_length]
-#         elif candidate.location + search_length > np.shape(acfs):
-#             acf_to_search = acfs[candidate.location - search_length:] 
-#         else:
-#             acf_to_search = acfs[candidate.location- search_length: candidate.location + search_length]
-            
-#         comp_result = abs(acf_to_search) >= thresh_sigma
-#         num_result = np.count_nonzero(comp_result)
-
-
-#         # summed = np.sum(candidate.image, axis=0)
-#         # # print(np.shape(summed))
-#         # median = np.median(summed)
-#         # med_dev = mad(summed)
-
-#         # norm = (summed - median)/med_dev
-
-
-
-#         if (num_result <= 5): #and (np.amax(norm)>=thresh_sigma):
-#             pruned_candidates.append(candidate)
-
-
-
-#     return pruned_candidates
-
-
-
-# def prune_candidates_modified(candidate, acfs, search_length, sub_int):
-#     search_length = int(np.round(search_length/sub_int))
-
-#     if candidate.location - search_length < 0:
-#         acf_to_search = acfs[:candidate.location + search_length]
-#     elif candidate.location + search_length > np.shape(acfs):
-#         acf_to_search = acfs[candidate.location - search_length:] 
-#     else:
-#         acf_to_search = acfs[candidate.location- search_length: candidate.location + search_length]
-
-
-#     comp_result = abs(acf_to_search) >= thresh_sigma
-#     num_result = np.count_nonzero(comp_result)
-
-#     if num_result <= 5:
-#         return True
-#     else:
-#         return False
-
-
-
-
-# def prune_candidates_windows(candidates, num_chans, num_samps, min_t, min_f):
-
-#     pruned_candidates = []
-#     for candidate in candidates:
-#         acf_window = candidate.acf_window
-
-#         t_widths = []
-#         f_widths = []
-#         for window in acf_window:
-#             t_widths.append(window[0])
-#             f_widths.append(window[1])
-
-#         min_t_widths = min(t_widths)
-#         min_f_widths = min(f_widths)
-
-#         if min_t_widths==min_t and min_f_widths==min_f:
-#             pruned_candidates.append(candidate)
-
-
-
-
-#     return pruned_candidates
-
-
-
-
 
 def print_candidates(total_candidates_sorted, burst_metadata):
 
@@ -399,23 +314,9 @@ def print_candidates(total_candidates_sorted, burst_metadata):
     return 
 
 
-# def pad_factor_data(data, num_chans):
-
-#     log_2 = int(np.ceil(np.log2(np.shape(data)[0])))
-#     num_of_zeros = 2**log_2 - np.shape(data)[0]
-
-#     zeros = np.zeros((num_of_zeros, num_chans), dtype=np.uint8)
-
-#     zero_padded_data = np.concatenate((data, zeros), axis=0)
-#     zero_padded_data = np.reshape(zero_padded_data, (int(np.shape(zero_padded_data)[0]/sub), sub, num_chans))
-
-#     return zero_padded_data
 
 def preprocess(data, metadata, bandpass_avg, bandpass_std):#, bandpass_avg, bandpass_std):
     sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart = metadata
-
-    # total_bandpassmean = np.zeros((np.shape(data)[0], np.shape(data)[1]//sub))
-    # total_bandpass_std = np.zeros((np.shape(data)[0], np.shape(data)[1]//sub))
 
 
     data_mean = np.mean(data, axis=0)
@@ -430,17 +331,14 @@ def preprocess(data, metadata, bandpass_avg, bandpass_std):#, bandpass_avg, band
 
     for index in np.arange(10):
 
-        data_std = data_std + (np.sqrt(np.shape(data)[0]//10)/np.sqrt(np.shape(data)[0]))*np.std(data[index*np.shape(data)[1]//10:(index+1)*np.shape(data)[1]//10, :], axis=0)
+        data_std = data_std + (np.sqrt(np.shape(data)[0]//10)/np.sqrt(np.shape(data)[0]))*\
+                    np.std(data[index*np.shape(data)[0]//10:(index+1)*np.shape(data)[0]//10, :], axis=0)
 
 
-    #print(data_std)
+
     data_std[np.where(data_std==0)] = 1
     bandpass_avg[np.where(bandpass_avg==0)] = 1
 
-    # print("start")
-    # data =  data/bandpass_avg
-    # print("end")
-    # bandpass_corrected_data = (data - (data_mean/data_std))/(data_std*np.sqrt(sub)/data_mean)
 
     for index in np.arange(np.shape(data)[0]//(sub)):
 
