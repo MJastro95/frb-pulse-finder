@@ -1047,9 +1047,10 @@ def main():
 
 
             means.mask = np.zeros(np.shape(means))
-            for acf in acfs_to_mask:
-                if acf<=np.shape(means)[0]:
-                    means.mask[acf] = 1
+            if maskfile:
+                for acf in acfs_to_mask:
+                    if acf<=np.shape(means)[0]:
+                        means.mask[acf] = 1
 
 
 
