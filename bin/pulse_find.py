@@ -215,7 +215,8 @@ def dedisperse(spectra, DM, ctr_freq, chan_width, time_samp, dtype):
     num_time_bins = np.shape(spectra)[1]
 
     #freq = np.linspace(ctr_freq + (chan_width*32), ctr_freq + (chan_width*32) - num_chans*chan_width, num_chans)
-    freq = np.flip(np.linspace(ctr_freq - (chan_width*num_chans/2) + chan_width/2, ctr_freq + (chan_width*num_chans/2) - chan_width/2, num_chans))
+    freq = np.flip(np.linspace(ctr_freq - (chan_width*num_chans/2) + chan_width/2, \
+                    ctr_freq + (chan_width*num_chans/2) - chan_width/2, num_chans))
 
 
     time_lags = delta(freq, freq[0], DM)/(1000*time_samp)
@@ -801,8 +802,7 @@ def main():
         dtype = '32'
         sub_int_orig = sub*time_samp
 
-    if chan_width < 0:
-        chan_width = abs(chan_width)
+
 
     #we use a standardized subintegration size of sub time bins to make processing of differently structured 
     #data sets easier to accomplish. Thus set sub_int time to sub*time_samp.
@@ -810,7 +810,7 @@ def main():
 
     
     sub_int = sub*time_samp
-    burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
+
 
 
     mask_chan = []
@@ -869,7 +869,7 @@ def main():
 
         ignore = ignore + mask_chan
 
-        if len(mask_chan)/num_chans >= 0.5:
+        if len(set(mask_chan))/num_chans >= 0.5:
             print("More than half the bandwidth is masked! Aborting...")
             with open("aborted_runs.txt", "a") as f:
                 f.write(filename + " aborted because {:0.0f}".format(100*len(mask_chan)/num_chans) + " percent of channels are masked\n")
@@ -908,6 +908,15 @@ def main():
                 all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = np.transpose(record[:,0,:,0])
 
 
+            if chan_width>0:
+                all_data = np.flip(all_data, axis=0)
+
+            chan_width = abs(chan_width)
+
+            burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)
+
+
+
             if zero_dm_filt:
                 data_mean = np.mean(data, axis=0)
                 data = data - data_mean                
@@ -932,6 +941,13 @@ def main():
             del data
         else:
             
+            if chan_width>0:
+                all_data = np.flip(data, axis=0)
+
+            chan_width = abs(chan_width)
+            
+            burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart)   
+
             if zero_dm_filt:
 
                 data_mean = np.mean(data, axis=0)
