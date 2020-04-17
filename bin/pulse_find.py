@@ -41,6 +41,28 @@ def print_string_sep(length, start):
 
 def gaussian_2d(input_tuple, mean_x, mean_y, 
                 sigma_x, sigma_y, rho, scale):
+    """
+    Return a 2d dimensional gaussian function flattened along axis.
+
+    Arguments:
+    input_tuple -- tuple of the form (x,y) where x,y are np.meshgrid like arrays
+    mean_x -- x-axis location parameter of gaussian
+    mean_y -- y-axis location parameter of gaussian
+    sigma_x -- x-axis shape parameter of gaussian
+    sigma_y -- y-axis shape paramter of gaussian
+    rho -- correlation coefficient between x an y (between -1 and 1)
+    scale -- scaling parameter controlling max value of gaussian
+
+    Returns:
+    A flattened version of the two-dimensional gaussian with the given inputs
+
+    Exceptions:
+    ValueError -- if absolute value of rho exceeds one
+    """
+
+    if abs(rho) > 1:
+        raise ValueError('abs(rho) should be less than one.')
+
     x = input_tuple[0]
     y = input_tuple[1]
     
@@ -53,18 +75,30 @@ def gaussian_2d(input_tuple, mean_x, mean_y,
 
 
 def auto_corr2d_fft(spec_2d, search_width, dtype):
+    """
+    Return 2d autocorrelation function of input array using numpy fft2.
+
+    Arguments:
+    spec_2d -- two dimensional input array with axes structure (freq, time)
+    search_width -- break spec_2d into chunks of this length in time. 
+                    Should always be equal to length of time axis of spec_2d.
+    dtype -- a valid numpy datatype to use for the return array.
+
+    Returns:
+    A list of acfs, with length equal to np.shape(spec_2d)[1]/search_width.
+    If search_width is set to length of time axis of spec_2d, as recommended,
+    then the return list is length 1.
+    """
 
     number_searches = np.shape(spec_2d)[1]/search_width 
     acfs = []
     for i in np.arange(number_searches):
-        #start_now = datetime.now()
+
         spec = spec_2d[search_width*int(i):search_width*int(i+1)]
 
 
         median = np.median(spec)
-
         med_dev = mad(spec, axis=None)
-
 
         if med_dev ==0:
             #prevent RuntimeWarnings for bad blocks 
@@ -72,21 +106,19 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
             med_dev=1
 
         shape = np.shape(spec)
-
-
         zero_padded_spec = median*np.ones((int(3*shape[0]/2), int(3*shape[1]/2))
                                             , dtype=dtype)
 
         zero_padded_spec[:shape[0], :shape[1]] = spec
-
         shape_padded = np.shape(zero_padded_spec)
-
 
         burst_fft = np.fft.fft2(((zero_padded_spec) - median)/(med_dev))
         burst_fft_conj = np.conj(burst_fft)
         acf = np.real(np.fft.ifft2(burst_fft*burst_fft_conj))/(shape[0]*shape[1])
 
-
+        # The 2d acf returned via a the fft2 method is the same shape as the
+        # input array. However, it is not automatically structured correctly,
+        # so we need to rearrange it. 
         quadrant_1 = acf[:int(np.round(shape_padded[0]/2)), 
                             :int(np.round(shape_padded[1]/2))]
 
@@ -107,15 +139,17 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
         acfs.append(whole_acf[int(shape[0]/4):int(5*shape[0]/4), 
                                 int(shape[1]/4): int(5*shape[1]/4)])
 
-
-
     return acfs
 
 
 def process_acf(record, time_samp, chan_width, 
                 num_chans, index, acf_array, dtype):
-    record = np.transpose(record)#.copy()
 
+    """
+    
+
+    """
+    record = np.transpose(record)
 
     if len(ignore) != 0:
         for value in ignore:
@@ -131,50 +165,29 @@ def process_acf(record, time_samp, chan_width,
 
                 record[int(begin):int(end), :] = 0
 
-
-
-
-
-
     record_ravel = record.ravel()
-
-
     record_nonzero=np.where(record.ravel()!=0)
 
     try:
 
         median = np.median(record_ravel[record_nonzero])
-
-
         med_dev = mad(record_ravel[record_nonzero])
-
         record_zero = np.where(record_ravel==0)
-
         normal_draw = np.random.normal(loc=median, scale=med_dev,
                                          size=np.shape(record_zero)[1])
 
-
-
         record_ravel[record_zero] = normal_draw
-
         record = np.reshape(record_ravel, (np.shape(record)[0], 
                                             np.shape(record)[1]))
 
-
     except FloatingPointError:
         median=0
-
         med_dev = 1
-
         record_zero = np.where(record_ravel==0)
-
         normal_draw = np.random.normal(loc=median, scale=med_dev, 
                                         size=np.shape(record_zero)[1])
 
-
-
         record_ravel[record_zero] = normal_draw
-
         record = np.reshape(record_ravel, (np.shape(record)[0], 
                                             np.shape(record)[1]))
 
@@ -192,9 +205,7 @@ def process_acf(record, time_samp, chan_width,
                                         np.shape(record)[1], dtype)[0]))
    
 
-
-
-    return #acf_array #means)
+    return 
 
 
 
