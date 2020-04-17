@@ -32,6 +32,17 @@ np.seterr(all='raise')
 #
 
 def print_string_sep(length, start):
+    """
+    Return string with start - length blank spaces
+
+    Arguments:
+        length -- length in characters between items on terminal window
+        start -- start in characters 
+
+    Returns:
+        String with start - length blank spaces
+    """
+
     string_to_print = ''
     for num in np.arange(start - length):
         string_to_print = string_to_print + " "
@@ -45,19 +56,20 @@ def gaussian_2d(input_tuple, mean_x, mean_y,
     Return a 2d dimensional gaussian function flattened along axis.
 
     Arguments:
-    input_tuple -- tuple of the form (x,y) where x,y are np.meshgrid like arrays
-    mean_x -- x-axis location parameter of gaussian
-    mean_y -- y-axis location parameter of gaussian
-    sigma_x -- x-axis shape parameter of gaussian
-    sigma_y -- y-axis shape paramter of gaussian
-    rho -- correlation coefficient between x an y (between -1 and 1)
-    scale -- scaling parameter controlling max value of gaussian
+        input_tuple -- tuple of the form (x,y) where x,y are 
+                       np.meshgrid like arrays
+        mean_x -- x-axis location parameter of gaussian
+        mean_y -- y-axis location parameter of gaussian
+        sigma_x -- x-axis shape parameter of gaussian
+        sigma_y -- y-axis shape paramter of gaussian
+        rho -- correlation coefficient between x an y (between -1 and 1)
+        scale -- scaling parameter controlling max value of gaussian
 
     Returns:
-    A flattened version of the two-dimensional gaussian with the given inputs
+        A flattened version of the two-dimensional gaussian with the given inputs
 
     Exceptions:
-    ValueError -- if absolute value of rho exceeds one
+        ValueError -- if absolute value of rho exceeds one
     """
 
     if abs(rho) > 1:
@@ -79,15 +91,15 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
     Return 2d autocorrelation function of input array using numpy fft2.
 
     Arguments:
-    spec_2d -- two dimensional input array with axes structure (freq, time)
-    search_width -- break spec_2d into chunks of this length in time. 
+        spec_2d -- two dimensional input array with axes structure (freq, time)
+        search_width -- break spec_2d into chunks of this length in time. 
                     Should always be equal to length of time axis of spec_2d.
-    dtype -- a valid numpy datatype to use for the return array.
+        dtype -- a valid numpy datatype to use for the return array.
 
     Returns:
-    A list of acfs, with length equal to np.shape(spec_2d)[1]/search_width.
-    If search_width is set to length of time axis of spec_2d, as recommended,
-    then the return list is length 1.
+        A list of acfs, with length equal to np.shape(spec_2d)[1]/search_width.
+        If search_width is set to length of time axis of spec_2d, as recommended,
+        then the return list is length 1.
     """
 
     number_searches = np.shape(spec_2d)[1]/search_width 
@@ -144,13 +156,24 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
 
 def process_acf(record, time_samp, chan_width, 
                 num_chans, index, acf_array, dtype):
-
     """
-    
+    Normalize dynamic spectrum and update acf_array with current acf.
 
+    Arguments:
+        record -- chunk of dynamic spectrum with axes as (time, freq)
+        time_samp -- sampling time of observation in seconds
+        chan_width -- channel bandwidth of observation in megahertz
+        num_chans -- total number of frequency channels in observation
+        index -- index of current loop
+        acf_array -- array to hold autocorrelation functions
+        dtype -- valid numpy data type
+
+    Returns:
+        None 
     """
     record = np.transpose(record)
 
+    # Represent masked data with zeros.
     if len(ignore) != 0:
         for value in ignore:
             value = value.split(":")
@@ -169,6 +192,12 @@ def process_acf(record, time_samp, chan_width,
     record_nonzero=np.where(record.ravel()!=0)
 
     try:
+        # Replace masked data with a sampling of noise consistent
+        # with the rest of the observation. This is done to prevent
+        # 'ringing' in the autocorrelation function from the masked
+        # channels. One can not simply take the autocorrelation of 
+        # masked data using the FFT method because the FFT algorithm
+        # implicityly assumes uniformly sampled data.
 
         median = np.median(record_ravel[record_nonzero])
         med_dev = mad(record_ravel[record_nonzero])
@@ -192,6 +221,11 @@ def process_acf(record, time_samp, chan_width,
                                             np.shape(record)[1]))
 
 
+    # Correct for the bandpass of the telescope by 
+    # normalizing each frequency channel. If this step 
+    # is not done, then there is again 'ringing' in the acf
+    # due to the frequency dependant baseline changes.
+
     median = np.median(record, axis=1)
     med_dev = mad(record, axis=1)
 
@@ -213,13 +247,43 @@ def process_acf(record, time_samp, chan_width,
 
 
 def delta(f1, f2, DM):
-    # f1<f2 
-    #return value in ms
+    """
+    Calculate the dispersive time delay in milliseconds.
+
+    Arguments:
+        f1 -- frequency of channel 1 in megahertz
+        f2 -- frequency of channel 2 in megahertz. Should be greater than f1.
+        DM -- dispersion measure in pc/cm^3
+    
+    Returns:
+        Dispersive time delay in milliseconds between f1 and f2.
+    
+    Exceptions:
+        ValueError -- if f1 > f2
+    """
+
+    if f1>f2:
+        raise ValueError('f1 must not be greater than f2')
+
     return (4.148808e6*(f1**(-2) - f2**(-2))*DM)
 
 
 def dedisperse(spectra, DM, ctr_freq, 
                 chan_width, time_samp, dtype):
+    """
+    Dedisperse a dynamic spectrum.
+
+    Arguments:
+        spectra -- dynamic spectrum
+        DM -- dispersion measure (pc/cm^3)
+        ctr_freq -- center frequency of band in megahertz
+        chan_width -- channel width in megahertz
+        time_samp -- sampling time of observation in seconds
+        dtype -- valid numpy data type 
+
+    Returns:
+        Dedispersed dynamic spectrum
+    """
     num_chans = np.shape(spectra)[0]
     num_time_bins = np.shape(spectra)[1]
 
@@ -248,6 +312,15 @@ def dedisperse(spectra, DM, ctr_freq,
 
 
 def fits_parse(infile):
+    """
+    Parse PSRFITS file using astropy
+
+    Arguments:
+        infile -- filename of fits file
+
+    Returns:
+        data and metadata of observation
+    """
     
     with fits.open(infile) as hdu:
 
@@ -278,6 +351,16 @@ def fits_parse(infile):
 
 
 def print_candidates(total_candidates_sorted, burst_metadata):
+    """
+    Print candidates to terminal window and save to disk.
+
+    Arguments:
+        total_candidates_sorted -- list of candidates sorted by SNR
+        burst_metadata -- metadata of observation
+
+    Returns:
+        None
+    """
 
     sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart = burst_metadata
     print("**************************************************************************************************************************")
@@ -343,6 +426,18 @@ def print_candidates(total_candidates_sorted, burst_metadata):
 
 
 def preprocess(data, metadata, bandpass_avg, bandpass_std):
+    """
+    Find short duration RFI and mask.
+
+    Arguments:
+        data -- dynamic spectrum of data
+        metadata -- metadata of observation
+        bandpass_avg -- bandpass average from PRESTO rfifind .stats file
+        bandpass_std -- bandpass standard deviation from PRESTO .stats file
+
+    Returns:
+        None
+    """
     sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, \
                                                 dec_string, tstart = metadata
 
@@ -356,7 +451,9 @@ def preprocess(data, metadata, bandpass_avg, bandpass_std):
     # if data standard deviation is taken directly 
     # on entire dataset using np.std a huge memory leak occurs. 
     # Therefore use this hack by finding std of each chunk
-    # to build total std
+    # to build total std. If you try to take the standard deviation
+    # using the below method on the entire dataset without splitting it up
+    # a memory leak again occurs. I have no idea why.
 
 
     for index in np.arange(10):
@@ -407,11 +504,48 @@ def preprocess(data, metadata, bandpass_avg, bandpass_std):
 #
 
 class Candidate:
-    # class definition for candidates found by acf algorithm
-    def __init__(self, location, sigma, image, 
-                    acf, fluence, metadata, snr, 
-                    gauss_fit, selected_window, true_burst, acf_window):
 
+    """Class for candidate bursts."""
+
+
+
+    def __init__(self, location, sigma, image, 
+                    acf, metadata, gauss_fit, 
+                    selected_window, true_burst, 
+                    acf_window):
+        """
+        __init__ method for Candidate.
+
+        Arguments:
+            location -- burst location either in seconds or subintegrations
+            sigma -- signal to noise ratio of acf
+            image -- dynamic spectrum of data at location
+            acf -- autocorrelation function of data at location
+            metadata -- metadata of observation
+            gauss_fit -- tuple of best fit parameters and covariance matrix
+                         of 2d gaussian fit to burst dynamic spectrum. This 
+                         should be set to zero if the interactive plotting 
+                         is not run. Otherwise, the interative plotting routine
+                         will set this automatically.
+            selected_window -- tuple of the form (x_left, x_right, 
+                               y_top, y_bottom), which represents the user
+                               selected window when running the interactive
+                               plotting routine. Again this should be set to 
+                               zero and the interactive plotting routine will
+                               set this automatically based on the user's
+                               choice.
+            true_burst -- boolean flag on whether a candidate is a true or false
+                          false positive. If the user confirms a burst using the
+                          interactive plotter, this will be set to true. Useful
+                          for statistics on the true positive rate of the 
+                          algorithm.
+            acf_window -- tuple which represents the window used to take the mean
+                          of the autocorrelation function. Should be of the form
+                          (time_width, freq_width).
+
+        Returns:
+            None
+        """
         self.location = location
         self.sigma = [sigma]
         self.acf_window = [(acf_window[0], acf_window[1])]
@@ -419,12 +553,23 @@ class Candidate:
         self.acf = acf
         self.fluence = fluence
         self.metadata = metadata
-        self.snr = snr
         self.gauss_fit = gauss_fit
         self.selected_window = selected_window
         self.true_burst = true_burst
 
     def update_acf_windows(self, sigma, time, freq):
+        """
+        Append a new acf_window and sigma to the respective existing lists.
+
+        Arguments:
+            sigma -- signal to noise ratio to append to sigma list
+            time -- time width of window used to take the mean of the acf.
+            freq -- freq width of window used to take the mean of the acf.
+
+        Returns:
+            None
+        """
+
         self.sigma.append(sigma)
         self.acf_window.append((time, freq))
 
@@ -433,7 +578,6 @@ class Candidate:
 
 
 class interactivePlot:
-    # class definiton for interactive plotting functionality
 
     def __init__(self, index, candidate):
         self.index = index
@@ -742,10 +886,12 @@ class interactivePlot:
 
 class rfifind(object):
 
-    # This class definition comes from the PRESTO rfifind.py 
-    # file by Scott Ransom, licensed under the GNU General Public 
-    # License. This modified version is included here here
-    # to read in rfifind mask files, and is compliant with GPL.
+    """ 
+    This class definition comes from the PRESTO rfifind.py 
+    file by Scott Ransom, licensed under the GNU General Public 
+    License. This modified version is included here to read 
+    in rfifind mask files, and is compliant with GPL.
+    """
 
     def __init__(self, filename):
         self.basename = filename[:filename.find("_rfifind.")+8]
@@ -1219,8 +1365,8 @@ def main():
 
                             candidate = Candidate(loc, 
                                         np.round(abs(acf_norm[loc]), decimals=2),
-                                        burst, acf_array[loc], 0, burst_metadata, 
-                                        0, 0, 0, False, (time, freq))
+                                        burst, acf_array[loc], burst_metadata, 
+                                        0, 0, False, (time, freq))
 
                         else:
                             burst = np.ma.array(np.transpose(all_data[loc*sub:(loc+1)*sub, :]))
@@ -1234,8 +1380,8 @@ def main():
 
                             candidate = Candidate(loc, 
                                         np.round(abs(acf_norm[loc]), decimals=2),
-                                        burst, acf_array[loc], 0, burst_metadata, 
-                                        0, 0, 0, False, (time, freq))
+                                        burst, acf_array[loc], burst_metadata, 
+                                        0, 0, False, (time, freq))
 
                         cand_dict[loc] = candidate
                         locs.add(loc)
@@ -1265,7 +1411,6 @@ def main():
 
         min_f_window = min(f_windows)
 
-        #if (max_t <= prune_value/1000) and (len(candidate.sigma)!= 1) and min_f_window<=5:
         if (max_t <= prune_value/1000):
             if min_f_window<=5:
                 prune_cand_list.append(candidate)
@@ -1290,8 +1435,6 @@ def main():
 
                 break
 
-            # if ip.true_burst==True:
-            #     candidate.true_burst=True
 
             if ip.d == True:
                 candidate.true_burst=False
