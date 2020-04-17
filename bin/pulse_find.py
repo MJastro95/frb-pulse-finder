@@ -142,6 +142,51 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
     return acfs
 
 
+def cross_corr_2d(boxcar, spec):
+
+    zero_padded_1 = np.zeros((3*np.shape(boxcar)[0]//2, 
+                            3*np.shape(boxcar)[1]//2))
+
+    zero_padded_1[:np.shape(boxcar)[0], :np.shape(boxcar)[1]] = boxcar
+
+    zero_padded_2 = np.zeros((3*np.shape(spec)[0]//2, 
+                            3*np.shape(spec)[1]//2))
+
+    zero_padded_2[:np.shape(spec)[0], :np.shape(spec)[1]] = spec
+
+    shape_padded = np.shape(zero_padded_1)
+
+
+    fft_1 = np.fft.fft2(zero_padded_1)
+    fft_2 = np.fft.fft2(zero_padded_2)
+
+    conj_2 = np.conj(fft_2)
+
+    corr = np.real(np.fft.ifft2(conj_2*fft_1))
+
+    quadrant_1 = corr[:int(np.round(shape_padded[0]/2)), 
+                        :int(np.round(shape_padded[1]/2))]
+
+    quadrant_2 = corr[int(np.round(shape_padded[0]/2)):, 
+                        :int(np.round(shape_padded[1]/2))]
+
+    quadrant_3 = corr[int(np.round(shape_padded[0]/2)):, 
+                        int(np.round(shape_padded[1]/2)):]
+
+    quadrant_4 = corr[:int(np.round(shape_padded[0]/2)), 
+                        int(np.round(shape_padded[1]/2)):]
+
+    right_half = np.concatenate((quadrant_2, quadrant_1), axis=0)
+    left_half = np.concatenate((quadrant_3, quadrant_4), axis=0)
+
+    whole_corr = np.concatenate((left_half, right_half), axis=1)
+
+    whole_corr = np.flip(whole_corr, axis=0)
+    whole_corr = np.flip(whole_corr, axis=1)
+
+    return whole_corr
+
+
 def process_acf(record, time_samp, chan_width, 
                 num_chans, index, acf_array, dtype):
 
@@ -205,7 +250,7 @@ def process_acf(record, time_samp, chan_width,
                                         np.shape(record)[1], dtype)[0]))
    
 
-    return 
+    return
 
 
 
@@ -325,7 +370,7 @@ def print_candidates(total_candidates_sorted, burst_metadata):
                 + "s_" + "burst", 
                 (candidate.metadata, candidate.acf, candidate.location, 
                 candidate.image, candidate.sigma, candidate.gauss_fit, 
-                candidate.selected_window, candidate.acf_window), 
+                candidate.selected_window, candidate.acf_window, cross_corr), 
                 allow_pickle=True)
         
 
@@ -1096,7 +1141,9 @@ def main():
 
         for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//sub)):
             record = dedispersed_data[index*sub:(index+1)*sub,:]
-            process_acf(record, time_samp, chan_width, num_chans, 
+
+            process_acf(record, time_samp, 
+                        chan_width, num_chans, 
                         index, acf_array, types[dtype])
 
 
@@ -1248,7 +1295,69 @@ def main():
 
 
 
+
     cand_list = [cand_dict[key] for key in cand_dict]
+
+    if cross_corr:
+
+        for cand in tqdm(cand_list):
+
+            sigma_max = candidate.sigma.index(max(candidate.sigma))
+            acf_window_where = candidate.acf_window[sigma_max]
+
+            time_width = acf_window_where[0]
+            freq_width = acf_window_where[1]
+
+            boxcar = np.zeros((num_chans, sub))
+            fcenter = num_chans//2
+            tcenter = sub//2
+            boxcar[int(fcenter-freq_width//2): int(fcenter + freq_width//2), 
+                    int(tcenter - time_width//2):int(tcenter + time_width//2)]\
+                                     = np.ones((int(2*freq_width//2), int(2*time_width//2)))
+
+            spec = cand.image
+
+            median = np.ma.median(spec, axis=1)
+            med_dev = mad(spec, axis=1)
+
+            try:
+                bandpass_corr_spec = np.transpose((np.transpose(spec) - median)/med_dev)
+            except FloatingPointError:
+                bandpass_corr_spec = np.zeros(np.shape(spec))
+
+            bandpass_corr_spec = np.ma.getdata(bandpass_corr_spec)
+
+            cc = cross_corr_2d(boxcar, bandpass_corr_spec)
+
+            cross_corr_mean = np.mean(cc)
+
+            N = (2*freq_width//2)*(2*time_width//2)
+            M = num_chans*sub 
+
+            stdev = np.sqrt(N/M)
+
+            center = cc.argmax()
+
+            #set center to time center
+            center = (center%num_chans) + (sub*cand.location)
+
+            burst = np.ma.array(np.transpose(dedispersed_data[center - 
+                        sub//2: center + sub//2]))
+
+            burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+            burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
+
+            for chan in mask_chan:
+                burst[int(chan), :].mask = np.ones(np.shape(burst)[1], 
+                                                        dtype=np.uint8)
+
+            cand.image = burst
+            cand.location = center/sub   
+
+
+
+
     np.seterr(all='raise')   
 
 
@@ -1357,12 +1466,8 @@ def main():
         else:
             offset = orig_time_samples*interval[0]*time_samp
 
-        if filename[-4:]=="fits":
-            cand.location = np.round(cand.location*sub_int + offset , decimals=2)
 
-        else:
-            cand.location = np.round(cand.location*sub_int + offset, decimals=2)
-
+        cand.location = np.round(cand.location*sub_int + offset , decimals=2)
 
     if flag==1:
         with open(outfilename + "_simulated_bursts.txt", "a") as f:
@@ -1458,10 +1563,17 @@ if __name__=='__main__':
                                             " entire observation.)"), 
                                             nargs=2, type=float, default=None)
 
-    parser.add_argument("--zero_dm_filt", help="Use a zero DM filter to remove" 
+    parser.add_argument("--zero_dm_filt", help=("Use a zero DM filter to remove" 
                                             " broadband RFI in the dispersed data." 
-                                            " Default=0: do not use zero DM filter.", 
+                                            " Default=0: do not use zero DM filter."), 
                                             type=int, default=0)
+
+    parser.add_argument("--cross_corr", help=("Find the pulse arrival time and"
+                                              " frequency center by cross correlating"
+                                              " boxcar with time and frequency" 
+                                                " widths equal to the best fit"
+                                                " ACF window with the dynamic"
+                                                " spectrum."), type=int, default=0)
 
     parser.add_argument("outfile", help="String to append to output files.", 
                                                                     default='')
@@ -1482,6 +1594,7 @@ if __name__=='__main__':
     sub = args.sub_int
     interval = args.interval
     zero_dm_filt = args.zero_dm_filt
+    cross_corr = args.cross_corr
 
 
 

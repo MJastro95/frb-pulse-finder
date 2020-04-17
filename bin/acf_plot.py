@@ -146,7 +146,7 @@ def main():
     p0 = args.p0
     maskfile = args.mask
 
-    metadata, acf, loc, burst, snr, gauss_fit, selected_window, acf_window = \
+    metadata, acf, loc, burst, snr, gauss_fit, selected_window, acf_window, cross_corr = \
                                             np.load(infile, allow_pickle=True)
 
     sub_int = metadata[0]
