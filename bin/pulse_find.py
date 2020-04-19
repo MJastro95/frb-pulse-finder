@@ -119,72 +119,73 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
         # The 2d acf returned via a the fft2 method is the same shape as the
         # input array. However, it is not automatically structured correctly,
         # so we need to rearrange it. 
-        quadrant_1 = acf[:int(np.round(shape_padded[0]/2)), 
-                            :int(np.round(shape_padded[1]/2))]
 
-        quadrant_2 = acf[int(np.round(shape_padded[0]/2)):, 
-                            :int(np.round(shape_padded[1]/2))]
 
-        quadrant_3 = acf[int(np.round(shape_padded[0]/2)):, 
-                            int(np.round(shape_padded[1]/2)):]
+        # +++++++++++      
+        # +  1 +  4 +    
+        # +    +    +    
+        # +++++++++++ 
+        # +  2 +  3 +
+        # +    +    +
+        # +++++++++++
 
-        quadrant_4 = acf[:int(np.round(shape_padded[0]/2)), 
-                            int(np.round(shape_padded[1]/2)):]
+        # The 2d acf is layed out like the square above.
+
+        # Quadrant 1 -- contains positive lags in time and frequency.
+        # Quadrant 2 -- contains negative lags, ordered in reverse, 
+        #               of frequency. Contains positive lags in time.
+        # Quadrant 3 -- contains negative lags in time and frequency, ordered in
+        #               reverse.
+        # Quadrant 4 -- contains postive lags in frequency, negative lags
+        #               time, ordered in reverse.
+
+        # Therefore, we need to reorder the acf such that it looks like the
+        # following square.
+
+        # +++++++++++   
+        # +  3 +  2 +    
+        # +    +    +    
+        # +++++++++++ 
+        # +  4 +  1 +
+        # +    +    +
+        # +++++++++++
+
+        # In addition, zero padding the ACF with N amount of zeros provides 
+        # 2N + 1 "good" lags (N positive lags, N negative lags, zero lag).
+        # Good here means that the calculation is not corrupted by the signal
+        # "wrapping" around on itself (a result of the fast fourier transform
+        # see e.g. Numerical Recipes by Press, Teukolsky, Vetterling 
+        # and Flannery for a discussion).
+        #   There are therefore K= M-(2N + 1) bad lags, where M is the shape
+        # of the zero padded array. Moreover, the bad lags occur at positions
+        # N+1 through N+K, as elements 0 is the zero lag, elements 1 through N
+        # are the good positive lags, and elements -1 through -N are the good 
+        # negative lags. So we need to be careful when indexing the output of
+        # the fft method to only grab the good lags.
+
+        # Since we zero pad with N=shape(data)/2 zeros, we grab the data like
+        # below. 
+        quadrant_1 = acf[:int(shape[0]/2)+1, 
+                            :int(shape[1]/2) + 1]
+
+        quadrant_2 = acf[-int(shape[0]/2):, 
+                            :int(shape[1]/2) + 1]
+
+        quadrant_3 = acf[-int(shape[0]/2):, 
+                         -int(shape[1]/2):]
+
+        quadrant_4 = acf[:int(shape[0]/2)+1, 
+                            -int(shape[1]/2):]
 
         right_half = np.concatenate((quadrant_2, quadrant_1), axis=0)
         left_half = np.concatenate((quadrant_3, quadrant_4), axis=0)
 
         whole_acf = np.concatenate((left_half, right_half), axis=1)
         
-        acfs.append(whole_acf[int(shape[0]/4):int(5*shape[0]/4), 
-                                int(shape[1]/4): int(5*shape[1]/4)])
 
+        acfs.append(whole_acf)
     return acfs
 
-
-def cross_corr_2d(boxcar, spec):
-
-    zero_padded_1 = np.zeros((3*np.shape(boxcar)[0]//2, 
-                            3*np.shape(boxcar)[1]//2))
-
-    zero_padded_1[:np.shape(boxcar)[0], :np.shape(boxcar)[1]] = boxcar
-
-    zero_padded_2 = np.zeros((3*np.shape(spec)[0]//2, 
-                            3*np.shape(spec)[1]//2))
-
-    zero_padded_2[:np.shape(spec)[0], :np.shape(spec)[1]] = spec
-
-    shape_padded = np.shape(zero_padded_1)
-
-
-    fft_1 = np.fft.fft2(zero_padded_1)
-    fft_2 = np.fft.fft2(zero_padded_2)
-
-    conj_2 = np.conj(fft_2)
-
-    corr = np.real(np.fft.ifft2(conj_2*fft_1))
-
-    quadrant_1 = corr[:int(np.round(shape_padded[0]/2)), 
-                        :int(np.round(shape_padded[1]/2))]
-
-    quadrant_2 = corr[int(np.round(shape_padded[0]/2)):, 
-                        :int(np.round(shape_padded[1]/2))]
-
-    quadrant_3 = corr[int(np.round(shape_padded[0]/2)):, 
-                        int(np.round(shape_padded[1]/2)):]
-
-    quadrant_4 = corr[:int(np.round(shape_padded[0]/2)), 
-                        int(np.round(shape_padded[1]/2)):]
-
-    right_half = np.concatenate((quadrant_2, quadrant_1), axis=0)
-    left_half = np.concatenate((quadrant_3, quadrant_4), axis=0)
-
-    whole_corr = np.concatenate((left_half, right_half), axis=1)
-
-    whole_corr = np.flip(whole_corr, axis=0)
-    whole_corr = np.flip(whole_corr, axis=1)
-
-    return whole_corr
 
 
 def process_acf(record, time_samp, chan_width, 
@@ -455,7 +456,8 @@ class Candidate:
     # class definition for candidates found by acf algorithm
     def __init__(self, location, sigma, image, 
                     acf, fluence, metadata, snr, 
-                    gauss_fit, selected_window, true_burst, acf_window):
+                    gauss_fit, selected_window, true_burst, 
+                    acf_window, freq_center):
 
         self.location = location
         self.sigma = [sigma]
@@ -468,11 +470,106 @@ class Candidate:
         self.gauss_fit = gauss_fit
         self.selected_window = selected_window
         self.true_burst = true_burst
+        self.freq_center = freq_center
 
     def update_acf_windows(self, sigma, time, freq):
         self.sigma.append(sigma)
         self.acf_window.append((time, freq))
 
+    def cross_corr_2d(self, boxcar, spec):
+
+
+        zero_padded_1 = np.zeros((3*np.shape(boxcar)[0]//2, 
+                                3*np.shape(boxcar)[1]//2))
+
+        zero_padded_1[:np.shape(boxcar)[0], :np.shape(boxcar)[1]] = boxcar
+        zero_padded_2 = np.zeros((3*np.shape(spec)[0]//2, 
+                                3*np.shape(spec)[1]//2))
+
+        zero_padded_2[:np.shape(spec)[0], :np.shape(spec)[1]] = spec
+        shape_padded = np.shape(zero_padded_1)
+        shape = np.shape(boxcar)
+
+        fft_1 = np.fft.fft2(zero_padded_1)
+        fft_2 = np.fft.fft2(zero_padded_2)
+
+        conj_2 = np.conj(fft_2)
+        corr = np.real(np.fft.ifft2(conj_2*fft_1))
+
+        quadrant_1 = corr[:(shape[0]//2)+1, 
+                            :(shape[1]//2)+1]
+
+        quadrant_2 = corr[-shape[0]//2:, 
+                            :(shape[1]//2) + 1]
+
+        quadrant_3 = corr[-shape[0]//2:, 
+                            -shape[1]//2:]
+
+        quadrant_4 = corr[:(shape[0]//2) + 1, 
+                            -shape[1]//2:]
+
+        right_half = np.concatenate((quadrant_2, quadrant_1), axis=0)
+        left_half = np.concatenate((quadrant_3, quadrant_4), axis=0)
+
+        whole_corr = np.concatenate((left_half, right_half), axis=1)
+
+
+        return whole_corr
+
+    def take_cross_corr(self):
+
+        sigma_max = self.sigma.index(max(self.sigma))
+        acf_window_where = self.acf_window[sigma_max]
+
+        time_width = acf_window_where[0]
+        freq_width = acf_window_where[1]
+
+        #             burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, 
+        #                       num_chans, dm, ra_string, dec_string, tstart)
+
+        num_chans = self.metadata[4]
+
+        boxcar = np.zeros((num_chans, sub))
+        fcenter = num_chans//2
+        tcenter = sub//2
+        boxcar[int(fcenter-freq_width//2): int(fcenter + freq_width//2), 
+                int(tcenter - time_width//2):int(tcenter + time_width//2)]\
+                                 = np.ones((int(2*(freq_width//2)), int(2*(time_width//2))))
+
+        spec = self.image
+
+        median = np.ma.median(spec, axis=1)
+        med_dev = mad(spec, axis=1)
+
+        try:
+            bandpass_corr_spec = np.transpose((np.transpose(spec) - median)/med_dev)
+        except FloatingPointError:
+            bandpass_corr_spec = np.zeros(np.shape(spec))
+
+        bandpass_corr_spec = np.ma.getdata(bandpass_corr_spec)
+
+        plt.imshow(bandpass_corr_spec, aspect='auto')
+        plt.show()
+
+        N = (2*freq_width//2)*(2*time_width//2)
+
+        cc = self.cross_corr_2d(bandpass_corr_spec, boxcar)/np.sqrt(N)
+
+        plt.imshow(cc, aspect='auto')
+        plt.show()
+
+        center = cc.argmax()
+
+
+        # cross_corr_mean = np.mean(cc)
+
+        # N = (2*freq_width//2)*(2*time_width//2)
+        # M = num_chans*sub 
+
+        # stdev = np.sqrt(N/M)
+
+
+        return center
 
 
 
@@ -1135,7 +1232,7 @@ def main():
 
 
         acf_array = np.ma.ones((int(total_time_samples/sub), 
-                        num_chans, sub), dtype=np.float32)
+                        num_chans + 1, sub + 1), dtype=np.float32)
 
         means = []
 
@@ -1175,8 +1272,8 @@ def main():
 
 
 
-        acf_array = np.ma.ones((int(total_time_samples/sub), num_chans, sub), 
-                                dtype=np.float32)
+        acf_array = np.ma.ones((int(total_time_samples/sub), num_chans + 1, 
+                                sub + 1), dtype=np.float32)
         means = []            
 
         print("\n Processing ACFs of each data chunk...")
@@ -1191,18 +1288,18 @@ def main():
 
 
     center_freq_lag = int(num_chans/2)
-    center_time_lag = 1024
+    center_time_lag = int(sub/2)
 
 
 
     acf_array.mask = np.zeros((int(total_time_samples/sub), 
-                                num_chans, sub), dtype=np.uint8)
+                                num_chans + 1, sub + 1), dtype=np.uint8)
     acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/sub),
-                                                    sub), dtype=np.uint8)
+                                                    sub + 1), dtype=np.uint8)
     acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/sub)
-                                                    ,sub), dtype=np.uint8)
+                                                    ,sub + 1), dtype=np.uint8)
     acf_array.mask[:, center_freq_lag+1, :] = np.ones((int(total_time_samples/sub)
-                                                    ,sub), dtype=np.uint8)
+                                                    ,sub + 1), dtype=np.uint8)
 
     min_t = 1
     min_f = 3
@@ -1240,7 +1337,7 @@ def main():
 
 
             N = (2*time)*(2*freq) - 3*(2*time)
-            stdev = 1/np.sqrt(N*num_chans*sub)
+            stdev = 1/np.sqrt(N*(num_chans + 1)*(sub + 1))
 
 
 
@@ -1267,7 +1364,7 @@ def main():
                             candidate = Candidate(loc, 
                                         np.round(abs(acf_norm[loc]), decimals=2),
                                         burst, acf_array[loc], 0, burst_metadata, 
-                                        0, 0, 0, False, (time, freq))
+                                        0, 0, 0, False, (time, freq), 0)
 
                         else:
                             burst = np.ma.array(np.transpose(all_data[loc*sub:(loc+1)*sub, :]))
@@ -1282,7 +1379,7 @@ def main():
                             candidate = Candidate(loc, 
                                         np.round(abs(acf_norm[loc]), decimals=2),
                                         burst, acf_array[loc], 0, burst_metadata, 
-                                        0, 0, 0, False, (time, freq))
+                                        0, 0, 0, False, (time, freq), 0)
 
                         cand_dict[loc] = candidate
                         locs.add(loc)
@@ -1297,63 +1394,6 @@ def main():
 
 
     cand_list = [cand_dict[key] for key in cand_dict]
-
-    if cross_corr:
-
-        for cand in tqdm(cand_list):
-
-            sigma_max = candidate.sigma.index(max(candidate.sigma))
-            acf_window_where = candidate.acf_window[sigma_max]
-
-            time_width = acf_window_where[0]
-            freq_width = acf_window_where[1]
-
-            boxcar = np.zeros((num_chans, sub))
-            fcenter = num_chans//2
-            tcenter = sub//2
-            boxcar[int(fcenter-freq_width//2): int(fcenter + freq_width//2), 
-                    int(tcenter - time_width//2):int(tcenter + time_width//2)]\
-                                     = np.ones((int(2*freq_width//2), int(2*time_width//2)))
-
-            spec = cand.image
-
-            median = np.ma.median(spec, axis=1)
-            med_dev = mad(spec, axis=1)
-
-            try:
-                bandpass_corr_spec = np.transpose((np.transpose(spec) - median)/med_dev)
-            except FloatingPointError:
-                bandpass_corr_spec = np.zeros(np.shape(spec))
-
-            bandpass_corr_spec = np.ma.getdata(bandpass_corr_spec)
-
-            cc = cross_corr_2d(boxcar, bandpass_corr_spec)
-
-            cross_corr_mean = np.mean(cc)
-
-            N = (2*freq_width//2)*(2*time_width//2)
-            M = num_chans*sub 
-
-            stdev = np.sqrt(N/M)
-
-            center = cc.argmax()
-
-            #set center to time center
-            center = (center%num_chans) + (sub*cand.location)
-
-            burst = np.ma.array(np.transpose(dedispersed_data[center - 
-                        sub//2: center + sub//2]))
-
-            burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
-
-            burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
-
-            for chan in mask_chan:
-                burst[int(chan), :].mask = np.ones(np.shape(burst)[1], 
-                                                        dtype=np.uint8)
-
-            cand.image = burst
-            cand.location = center/sub   
 
 
 
@@ -1383,6 +1423,56 @@ def main():
     pruned_cand_sorted = sorted(prune_cand_list, 
                                 reverse=True, 
                                 key= lambda prune_candidate: max(prune_candidate.sigma))
+
+
+
+    if cross_corr:
+
+        for cand in tqdm(pruned_cand_sorted):
+
+            center = cand.take_cross_corr()
+
+
+            # use sub+1 to account for the fact that
+            # cross correlated data has a zero lag
+            # giving total length in time of sub + 1
+            tcenter = (center%(sub+1)) + (sub*cand.location)
+            fcenter = (center//(sub+1))
+
+            burst = np.ma.array(np.transpose(dedispersed_data[tcenter - 
+                        sub//2: tcenter + sub//2]))
+
+            burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+
+            burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
+
+            for chan in mask_chan:
+                burst[int(chan), :].mask = np.ones(np.shape(burst)[1], 
+                                                        dtype=np.uint8)
+
+            cand.image = burst
+            cand.location = tcenter/sub
+            cand.freq_center = (ctr_freq + num_chans*chan_width/2) \
+                                - fcenter*chan_width   
+
+
+        # Remove duplicates of the same burst.
+        # Duplicates can occur if burst is split
+        # across different chunks of data.
+        cands_to_remove = []
+        for i in range(len(pruned_cand_sorted)-1):
+            loc = pruned_cand_sorted[i].location 
+
+            for j in range(i+1, len(pruned_cand_sorted)):
+                if abs(pruned_cand_sorted[j].location - loc) <= 1:
+                    # if candidates are within one sub integration of each
+                    # other, remove the one with lower snr
+                    cands_to_remove.append(j)
+
+        pruned_cand_sorted = [cand for cand in pruned_cand_sorted if 
+                                pruned_cand_sorted.index(cand) 
+                                not in cands_to_remove]
+
 
 
     if plot==1:
@@ -1440,6 +1530,7 @@ def main():
                                                                 dtype=np.uint8)
 
                     candidate.image = burst
+                    candidate.freq_center = popt[1]
 
                 else:
                     popt = candidate.gauss_fit[0]

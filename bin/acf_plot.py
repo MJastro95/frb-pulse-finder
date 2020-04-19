@@ -159,7 +159,7 @@ def main():
     dec = metadata[7]
     tstart = metadata[8]
 
-
+    data_shape = np.shape(burst)
 
     if maskfile:
         # read in maskfile if it has been provided and set channels to ignore
@@ -188,7 +188,7 @@ def main():
     acf_shape = np.shape(acf)
 
     if bounds==0:
-        bounds=acf_shape[1]
+        bounds=acf_shape[1] - 1
 
     axis1_center = int(acf_shape[0]/2)
     axis2_center = int(acf_shape[1]/2)
@@ -204,7 +204,7 @@ def main():
     # acf.mask[int(acf_shape[0]/2)-1, :] = np.ones(acf_shape[1], dtype=np.uint8)
 
     acf_to_plot = acf[:, 
-                axis2_center - int(bounds/2): axis2_center + int(bounds/2)]
+                axis2_center - int(bounds/2): axis2_center + int(bounds/2) + 1]
 
 
     extent = [-bounds*time_samp*1000/2, 
@@ -257,11 +257,11 @@ def main():
 
     time_array = np.linspace(-bounds*time_samp*1000/2, 
                             bounds*time_samp*1000/2, 
-                            bounds)
+                            bounds + 1)
 
     freq_array = np.linspace(bandwidth/2, 
                             -bandwidth/2,
-                            num_chan)
+                            num_chan + 1)
 
     mean = np.mean(acf_to_plot, axis=0)
 
@@ -274,19 +274,29 @@ def main():
 
 
     if selected_window==0:
-        extent= [loc, 
-                loc + acf_shape[1]*time_samp, 
-                ctr_freq - bandwidth/2, 
-                ctr_freq + bandwidth/2]
 
-        time_array = np.linspace(loc, loc + acf_shape[1]*time_samp, acf_shape[1])
-        ax2.text(4, height - 0.75, "Burst location: {:.2f}".format(loc) + " s", 
-                                    fontsize=12, transform=fig.dpi_scale_trans)
+        if not cross_corr:
+            extent= [loc, 
+                    loc + data_shape[1]*time_samp, 
+                    ctr_freq - bandwidth/2, 
+                    ctr_freq + bandwidth/2]
+
+            time_array = np.linspace(loc, loc + data_shape[1]*time_samp, data_shape[1])
+            ax2.text(4, height - 0.75, "Burst location: {:.2f}".format(loc) + " s", 
+                                        fontsize=12, transform=fig.dpi_scale_trans)
+        else:
+            extent = [loc - data_shape[1]*time_samp/2, 
+                        loc + data_shape[1]*time_samp/2,
+                        ctr_freq - bandwidth/2,
+                        ctr_freq + bandwidth/2]
+
+            time_array = np.linspace(loc - data_shape[1]*time_samp/2, loc + data_shape[1]*time_samp/2, data_shape[1])
+            ax2.text(4, height - 0.75, "Burst location: {:.2f}".format(loc) + " s", 
+                                        fontsize=12, transform=fig.dpi_scale_trans)
 
     else:
         popt = gauss_fit[0]
         time_center = int(popt[0]/time_samp)
-        data_shape = np.shape(burst)
 
         extent = [-time_samp*data_shape[1]*1000/2, 
                 time_samp*data_shape[1]*1000/2, 
@@ -407,9 +417,9 @@ def main():
 
             time_array = np.linspace(-bounds*time_samp*1000/2, 
                                     bounds*time_samp*1000/2, 
-                                    bounds)
+                                    bounds + 1)
 
-            freq_array = np.linspace(-bandwidth/2, bandwidth/2, num_chan)
+            freq_array = np.linspace(-bandwidth/2, bandwidth/2, num_chan + 1)
 
             x,y = np.meshgrid(time_array, freq_array)
 
@@ -455,11 +465,11 @@ def main():
 
 
             ax1.contour(x, y, 
-                    gaussian_2d((x, y), *popt).reshape(int(num_chan), int(bounds)))
+                    gaussian_2d((x, y), *popt).reshape(num_chan + 1, bounds + 1))
 
             axbottom1.plot(time_array, 
-                            np.mean(gaussian_2d((x, y), *popt).reshape(int(num_chan), 
-                                                int(bounds)), axis=0), color='r')
+                            np.mean(gaussian_2d((x, y), *popt).reshape(num_chan + 1, 
+                                                bounds + 1), axis=0), color='r')
 
             axbottom1.margins(x=0)
 
@@ -468,14 +478,14 @@ def main():
             mean = np.mean(acf_to_plot, axis=1)
 
 
-            freq_array = np.linspace(-bandwidth/2, bandwidth/2, num_chan)
+            freq_array = np.linspace(-bandwidth/2, bandwidth/2, num_chan + 1)
 
 
             popt_freq, pcov_Freq = curve_fit(normal_fit, freq_array, mean, p0=(1, 1, 100))
 
 
-            axright1.plot(np.mean(gaussian_2d((x, y), *popt).reshape(int(num_chan), 
-                                            int(bounds)), axis=1), freq_array, color='r')
+            axright1.plot(np.mean(gaussian_2d((x, y), *popt).reshape(num_chan + 1, 
+                                            bounds + 1), axis=1), freq_array, color='r')
             axright1.margins(y=0)
 
 
@@ -499,9 +509,9 @@ def main():
         if fit=="lorentz" or fit=="Lorentz":
             time_array = np.linspace(-bounds*time_samp*1000/2, 
                         bounds*time_samp*1000/2, 
-                        bounds)
+                        bounds + 1)
 
-            freq_array = np.linspace(-bandwidth/2, bandwidth/2, num_chan)
+            freq_array = np.linspace(-bandwidth/2, bandwidth/2, num_chan + 1)
             
             x,y = np.meshgrid(time_array, freq_array)
 
@@ -524,7 +534,7 @@ def main():
 
 
 
-            ax1.contour(x, y, lorentzian_2d((x, y), *res.x).reshape(int(num_chan), int(bounds)))
+            ax1.contour(x, y, lorentzian_2d((x, y), *res.x).reshape(num_chan + 1, bounds + 1))
 
             print(res.x)
 
@@ -547,7 +557,7 @@ def main():
                     + " MHz/ms")
 
             axbottom1.plot(time_array, 
-                            np.mean(lorentzian_2d((x, y), *res.x).reshape(int(num_chan), int(bounds)), axis=0), color='r')
+                            np.mean(lorentzian_2d((x, y), *res.x).reshape(num_chan + 1, bounds + 1), axis=0), color='r')
             axbottom1.margins(x=0)
 
             axbottom1.set_xlabel("Time (ms)", fontsize=12)
@@ -557,13 +567,13 @@ def main():
             mean = np.mean(acf_to_plot, axis=1)
 
 
-            array = np.linspace(-bandwidth/2, bandwidth/2, num_chan)
+            array = np.linspace(-bandwidth/2, bandwidth/2, num_chan + 1)
 
 
             popt_freq, pcov_freq = curve_fit(cauchy_fit, array, mean)
 
 
-            axright1.plot(np.mean(lorentzian_2d((x, y), *res.x).reshape(int(num_chan), int(bounds)), axis=1), array, color='r')
+            axright1.plot(np.mean(lorentzian_2d((x, y), *res.x).reshape(num_chan + 1, bounds + 1), axis=1), array, color='r')
             axright1.margins(y=0)
 
     plt.show()
