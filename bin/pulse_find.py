@@ -308,7 +308,7 @@ def delta(f1, f2, DM):
         ValueError -- if f1 > f2
     """
 
-    if f1>f2:
+    if f1.any()>f2:
         raise ValueError('f1 must not be greater than f2')
 
     return (4.148808e6*(f1**(-2) - f2**(-2))*DM)
@@ -454,7 +454,8 @@ def print_candidates(total_candidates_sorted, burst_metadata):
                 + "s_" + "burst", 
                 (candidate.metadata, candidate.acf, candidate.location, 
                 candidate.image, candidate.sigma, candidate.gauss_fit, 
-                candidate.selected_window, candidate.acf_window, cross_corr), 
+                candidate.selected_window, candidate.acf_window, cross_corr,
+                candidate.cc_snr, candidate.freq_center), 
                 allow_pickle=True)
         
 
@@ -586,6 +587,8 @@ class Candidate:
             acf_window -- tuple which represents the window used to take the mean
                           of the autocorrelation function. Should be of the form
                           (time_width, freq_width).
+            freq_center -- frequency center of the burst as determined by the
+                           cross correlation analysis.
 
         Returns:
             None
@@ -689,17 +692,15 @@ class Candidate:
 
         bandpass_corr_spec = np.ma.getdata(bandpass_corr_spec)
 
-        plt.imshow(bandpass_corr_spec, aspect='auto')
-        plt.show()
 
         N = (2*freq_width//2)*(2*time_width//2)
 
         cc = self.cross_corr_2d(bandpass_corr_spec, boxcar)/np.sqrt(N)
 
-        plt.imshow(cc, aspect='auto')
-        plt.show()
-
         center = cc.argmax()
+        cc_max = np.amax(cc)
+
+        self.cc_snr = cc_max
 
 
         # cross_corr_mean = np.mean(cc)
@@ -1581,7 +1582,7 @@ def main():
             fcenter = (center//(sub+1))
 
             burst = np.ma.array(np.transpose(dedispersed_data[tcenter - 
-                        sub//2: tcenter + sub//2]))
+                        sub//2: tcenter + sub//2 + 1]))
 
             burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
 

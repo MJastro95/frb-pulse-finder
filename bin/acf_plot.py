@@ -5,10 +5,10 @@ import numpy as np
 import matplotlib as mpl
 mpl.use("TkAgg")
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle as r
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import argparse as ap 
 import sys
-import matplotlib as mpl
 from scipy.stats import cauchy
 from scipy.optimize import curve_fit
 from scipy.stats import norm
@@ -17,6 +17,7 @@ from scipy.optimize import least_squares
 from scipy.optimize import minimize
 from scipy.stats import median_absolute_deviation as mad
 from pulse_find import rfifind
+
 
 np.seterr(under="warn")
 
@@ -138,6 +139,8 @@ def main():
 
     parser.add_argument("--mask", help="PRESTO rfifind mask")
 
+    parser.add_argument("--rect_plot", help="Plot rectangle used for cross correlation around center of burst.",type=int, default=0)
+
     args = parser.parse_args()
 
     infile = args.infile
@@ -145,8 +148,9 @@ def main():
     bounds = args.bounds
     p0 = args.p0
     maskfile = args.mask
+    rect_plot = args.rect_plot
 
-    metadata, acf, loc, burst, snr, gauss_fit, selected_window, acf_window, cross_corr = \
+    metadata, acf, loc, burst, snr, gauss_fit, selected_window, acf_window, cross_corr, cc_snr, freq_center = \
                                             np.load(infile, allow_pickle=True)
 
     sub_int = metadata[0]
@@ -285,13 +289,13 @@ def main():
             ax2.text(4, height - 0.75, "Burst location: {:.2f}".format(loc) + " s", 
                                         fontsize=12, transform=fig.dpi_scale_trans)
         else:
-            extent = [loc - data_shape[1]*time_samp/2, 
-                        loc + data_shape[1]*time_samp/2,
+            extent = [-data_shape[1]*time_samp*1000/2, 
+                        data_shape[1]*time_samp*1000/2,
                         ctr_freq - bandwidth/2,
                         ctr_freq + bandwidth/2]
 
-            time_array = np.linspace(loc - data_shape[1]*time_samp/2, loc + data_shape[1]*time_samp/2, data_shape[1])
-            ax2.text(4, height - 0.75, "Burst location: {:.2f}".format(loc) + " s", 
+            time_array = np.linspace(-data_shape[1]*time_samp*1000/2, data_shape[1]*time_samp*1000/2, data_shape[1])
+            ax2.text(4, height - 0.75, "Burst location (cc): {:.2f}".format(loc) + " s", 
                                         fontsize=12, transform=fig.dpi_scale_trans)
 
     else:
@@ -311,7 +315,20 @@ def main():
                 "Burst location (Gaussian fit): {:.2f}".format(popt[0]) + " s", 
                 fontsize=12, transform=fig.dpi_scale_trans)
 
+
+    if cross_corr and rect_plot:
+        rect = r((-1000*time_samp*acf_window_max[0], freq_center-chan_width*acf_window_max[1]), 
+                2*(1000*time_samp*acf_window_max[0]), 2*(chan_width*acf_window_max[1]), fill=False, transform=ax2.transData)
+        ax2.set_ylim(ctr_freq - bandwidth/2, ctr_freq+bandwidth/2)
+        ax2.add_patch(rect)
+        ax2.scatter(0, freq_center, marker="+", s=40, color='r')
+
     ax2.imshow(burst, aspect='auto', extent=extent, interpolation='none')
+
+
+
+
+
     divider = make_axes_locatable(ax2)
 
     axbottom2 = divider.append_axes("bottom", size=1.2, pad=0.3, sharex=ax2)
@@ -342,14 +359,14 @@ def main():
                     mfc='k', ms=1, mec='k', color='k')
 
         axbottom2.set_xlabel("Time (ms)", fontsize=12)
-    else:
-
-        axbottom2.set_xlabel("Time (s)", fontsize=12)
+    else:  
+        if cross_corr: 
+            axbottom2.set_xlabel("Time (ms)", fontsize=12)
+        else:
+            axbottom2.set_xlabel("Time (s)", fontsize=12)
     ax2.set_ylabel("Frequency (MHz)", fontsize=12)
 
-    #scientific_notation = "{:e}".format(12300000)
-    #def printC(answer):
-    #print("\nYour Celsius value is {:0.2f}ºC.\n".format(answer))
+
     ax2.text(0.5, height - 0.5, "Metadata for observation:", 
             fontsize=12, transform=fig.dpi_scale_trans)
 
@@ -383,29 +400,38 @@ def main():
     ax2.text(4, height - 1, "SNR of ACF: {:.2f}".format(max(snr)), 
             fontsize=12, transform=fig.dpi_scale_trans)
 
-    ax2.text(4, height - 1.25, 
-            "Time window width: {:0.2f}".format(1000*time_samp*acf_window_max[0]) 
-            + " ms", 
+
+    if cross_corr:
+        ax2.text(4, height - 1.25, "SNR of CCF: {:.2f}".format(cc_snr), 
             fontsize=12, transform=fig.dpi_scale_trans)
+    else:
+        ax2.text(4, height - 1.25, "SNR of CCF: N/A", 
+            fontsize=12, transform=fig.dpi_scale_trans)       
 
     ax2.text(4, height - 1.5, 
+        "Time window width: {:0.2f}".format(1000*time_samp*acf_window_max[0]) 
+        + " ms", 
+        fontsize=12, transform=fig.dpi_scale_trans)
+
+    ax2.text(4, height - 1.75, 
             "Frequency window width: {:0.2f}".format(chan_width*acf_window_max[1]) 
             + " MHz", 
             fontsize=12, transform=fig.dpi_scale_trans)
 
+
     fig.canvas.draw()
 
     if fit=='':
-        ax2.text(4, height - 1.75, "Fit type: " + "N/A", 
+        ax2.text(4, height - 2, "Fit type: " + "N/A", 
                 fontsize=12, transform=fig.dpi_scale_trans) 
 
-        ax2.text(4, height - 2, "Time width: N/A" , 
+        ax2.text(4, height - 2.25, "Time width: N/A" , 
                 fontsize=12, transform=fig.dpi_scale_trans)
 
-        ax2.text(4, height - 2.25, "Frequency Width: N/A", 
+        ax2.text(4, height - 2.5, "Frequency Width: N/A", 
                 fontsize=12, transform=fig.dpi_scale_trans)
 
-        ax2.text(4, height - 2.5, "Drift Rate: N/A", 
+        ax2.text(4, height - 2.75, "Drift Rate: N/A", 
                 fontsize=12, transform=fig.dpi_scale_trans)
 
         plt.show()
@@ -489,20 +515,20 @@ def main():
             axright1.margins(y=0)
 
 
-            ax2.text(4, height - 1.75, 
+            ax2.text(4, height - 2, 
                     "Fit type: " + fit, 
                     fontsize=12, transform=fig.dpi_scale_trans)      
 
-            ax2.text(4, height - 2, 
+            ax2.text(4, height - 2.25, 
                     "Time width: {:0.2f}".format(2*np.sqrt(2*np.log(2))*sigma_x) 
                     + " ms" , 
                     fontsize=12, transform=fig.dpi_scale_trans)
 
-            ax2.text(4, height - 2.25, 
+            ax2.text(4, height - 2.5, 
                     "Frequency Width: {:0.2f}".format(2*np.sqrt(2*np.log(2))*sigma_y) 
                     + " MHz", fontsize=12, transform=fig.dpi_scale_trans)       
 
-            ax2.text(4, height - 2.5, 
+            ax2.text(4, height - 2.75, 
                 "Drift Rate: {:0.2f}".format(slope) + " MHz/ms", 
                 fontsize=12, transform=fig.dpi_scale_trans)
 
