@@ -1199,6 +1199,8 @@ def main():
 
 
     mask_chan = []
+    acfs_to_mask = []
+    
     if maskfile:
         # read in maskfile if it has been provided and set channels to ignore
 
@@ -1222,7 +1224,6 @@ def main():
             # of observation
             offset = orig_time_samples*interval[0]*time_samp
 
-        acfs_to_mask = []
         for i in mask_int:
             pts = i*ptsperint
             start = int(np.floor(pts/sub)) - int(np.floor((offset/time_samp)/sub))
