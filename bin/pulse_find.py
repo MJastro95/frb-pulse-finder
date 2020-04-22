@@ -458,10 +458,7 @@ def print_candidates(total_candidates_sorted, burst_metadata):
         np.save(str(outfilename) + "_" + 
                 str(np.around(candidate.location, decimals=2)) 
                 + "s_" + "burst", 
-                (candidate.metadata, candidate.acf, candidate.location, 
-                candidate.image, candidate.sigma, candidate.gauss_fit, 
-                candidate.selected_window, candidate.acf_window, cross_corr,
-                candidate.cc_snr, candidate.freq_center), 
+                [candidate], 
                 allow_pickle=True)
         
 
@@ -610,6 +607,8 @@ class Candidate:
         self.true_burst = true_burst
         self.freq_center = freq_center
 
+        self.cross_corr = False
+
     def update_acf_windows(self, sigma, time, freq):
         """
         Append a new acf_window and sigma to the respective existing lists.
@@ -667,6 +666,7 @@ class Candidate:
         return whole_corr
 
     def take_cross_corr(self):
+        self.cross_corr = True
 
         sigma_max = self.sigma.index(max(self.sigma))
         acf_window_where = self.acf_window[sigma_max]
@@ -1200,7 +1200,7 @@ def main():
 
     mask_chan = []
     acfs_to_mask = []
-    
+
     if maskfile:
         # read in maskfile if it has been provided and set channels to ignore
 

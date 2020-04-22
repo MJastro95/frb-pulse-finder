@@ -17,19 +17,12 @@ from scipy.optimize import least_squares
 from scipy.optimize import minimize
 from scipy.stats import median_absolute_deviation as mad
 from pulse_find import rfifind
+from pulse_find import Candidate
 
 
 np.seterr(under="warn")
 
-class Candidate:
-    def __init__(self, location, sigma, image, acf, fluence, metadata, snr):
-        self.location = location
-        self.sigma = sigma
-        self.image = image
-        self.acf = acf
-        self.fluence = fluence
-        self.metadata = metadata
-        self.snr = snr
+
 
 
 def gaussian_2d(input_tuple, mean_x, mean_y, sigma_x, sigma_y, rho, scale):
@@ -150,8 +143,24 @@ def main():
     maskfile = args.mask
     rect_plot = args.rect_plot
 
-    metadata, acf, loc, burst, snr, gauss_fit, selected_window, acf_window, cross_corr, cc_snr, freq_center = \
-                                            np.load(infile, allow_pickle=True)
+    # candidates are pickled as a list with the only element 
+    # equal to the instance of the candidate object.
+    # Pickling the candidate object directly leads to errors
+    # trying to load in candidate, for some reason.
+    candidate = np.load(infile, allow_pickle=True)
+    candidate = candidate[0]
+    metadata = candidate.metadata
+    acf = candidate.acf 
+    loc = candidate.location 
+    burst = candidate.image 
+    snr = candidate.sigma 
+    gauss_fit = candidate.gauss_fit
+    selected_window = candidate.selected_window 
+    acf_window = candidate.acf_window 
+    cross_corr = candidate.cross_corr
+    cc_snr = candidate.cc_snr
+    freq_center = candidate.freq_center
+
 
     sub_int = metadata[0]
     time_samp = metadata[1]
