@@ -409,16 +409,16 @@ def print_candidates(total_candidates_sorted, burst_metadata):
     """
 
     sub_int, time_samp, ctr_freq, chan_width, num_chans, dm, ra_string, dec_string, tstart = burst_metadata
-    print("**************************************************************************************************************************")
-    print("**************************************************************************************************************************")
-    print("********************************************                             *************************************************")
-    print("********************************************  Detected burst properties  *************************************************")
-    print("********************************************                             *************************************************")
-    print("**************************************************************************************************************************")
-    print("**************************************************************************************************************************\n")
-    print("**************************************************************************************************************************")
-    print("Burst location (s)                Max ACF SNR              Time Window Max SNR (ms)         Frequency Window Max SNR (MHz)")
-    print("**************************************************************************************************************************")
+    print("********************************************************************************************************************************************")
+    print("********************************************************************************************************************************************")
+    print("*******************************************************                             ********************************************************")
+    print("*******************************************************  Detected burst properties  ********************************************************")
+    print("*******************************************************                             ********************************************************")
+    print("********************************************************************************************************************************************")
+    print("********************************************************************************************************************************************\n")
+    print("********************************************************************************************************************************************")
+    print("Burst location (s)             MJD                  Max ACF SNR              Time Window Max SNR (ms)         Frequency Window Max SNR (MHz)")
+    print("********************************************************************************************************************************************")
 
     for index, candidate in enumerate(total_candidates_sorted):
 
@@ -427,25 +427,31 @@ def print_candidates(total_candidates_sorted, burst_metadata):
         t_window = np.round(acf_window_where[0]*time_samp*1000, decimals=2)
         f_window = np.round(acf_window_where[1]*chan_width, decimals=2)
 
+        burst_mjd = tstart + (candidate.location/86400)
+
         print(str(candidate.location) 
-            + print_string_sep(len(str(candidate.location)), 34) 
+            + print_string_sep(len(str(candidate.location)), 31)
+            + "{:0.5f}".format(burst_mjd)
+            + print_string_sep(len("{:0.5f}".format(burst_mjd)), 21) 
             +"{:0.2f}".format(max(candidate.sigma)) 
-            + print_string_sep(len(str(np.round(max(candidate.sigma), decimals=2))), 25) 
+            + print_string_sep(len("{:0.2f}".format(max(candidate.sigma))), 25) 
             + str(t_window) + print_string_sep(len(str(t_window)), 33) 
             + str(f_window))
 
         with open(outfilename + "_detected_bursts.txt", "a") as f:
             if index==0:
-                f.write("# Location (s), Max ACF SNR, DM, Time Window (ms), Frequency Window (MHz)\n")
+                f.write("# Location (s), MJD (topo), Max ACF SNR, DM, Time Window (ms), Frequency Window (MHz)\n")
 
                 f.write(str(candidate.location) 
-                    + "," + "{:0.2f}".format(max(candidate.sigma)) 
+                    + "," + "{:0.5f}".format(burst_mjd)
+                    + "," + "{:0.2f}".format(max(candidate.sigma))
                     + "," + str(dm) + ","
                     + str(t_window) + "," + str(f_window) + "\n")
             else:
 
-                f.write(str(candidate.location) + "," 
-                    + "{:0.2f}".format(max(candidate.sigma)) 
+                f.write(str(candidate.location) 
+                    + "," + "{:0.5f}".format(burst_mjd)
+                    + "," + "{:0.2f}".format(max(candidate.sigma)) 
                     + "," + str(dm) + "," 
                     + str(t_window) + "," + str(f_window) + "\n")                
 
@@ -460,8 +466,8 @@ def print_candidates(total_candidates_sorted, burst_metadata):
         
 
 
-    print("**************************************************************************************************************************")
-    print("**************************************************************************************************************************\n")    
+    print("*******************************************************************************************************************************************")
+    print("*******************************************************************************************************************************************\n")    
 
 
     if len(total_candidates_sorted)!= 0:
