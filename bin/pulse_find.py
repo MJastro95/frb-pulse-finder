@@ -682,9 +682,9 @@ class Candidate:
         boxcar = np.zeros((num_chans, sub))
         fcenter = num_chans//2
         tcenter = sub//2
-        boxcar[int(fcenter-freq_width//2): int(fcenter + freq_width//2), 
-                int(tcenter - time_width//2):int(tcenter + time_width//2)]\
-                                 = np.ones((int(2*(freq_width//2)), int(2*(time_width//2))))
+        boxcar[int(fcenter-freq_width//2): int(fcenter + (freq_width//2) + 1), 
+                int(tcenter - time_width//2):int(tcenter + (time_width//2) + 1)]\
+                                 = np.ones((int(2*(freq_width//2) + 1), int(2*(time_width//2) + 1)))
 
         spec = self.image
 
@@ -699,7 +699,7 @@ class Candidate:
         bandpass_corr_spec = np.ma.getdata(bandpass_corr_spec)
 
 
-        N = (2*freq_width//2)*(2*time_width//2)
+        N = 4*((freq_width//2) + 1)*((time_width//2) + 1)
 
         cc = self.cross_corr_2d(bandpass_corr_spec, boxcar)/np.sqrt(N)
 
@@ -1459,6 +1459,38 @@ def main():
     f_wins = np.linspace(min_f, int(num_chans/2), 10)
 
 
+    # weights_bottom = np.arange(1, (num_chans//2) + 1)
+    # weights_top = np.arange((num_chans//2) +1)
+
+    # weights_time = np.concatenate((np.flip(weights_bottom), weights_top))
+    # weights_time[(np.shape(weights_time)//2)[0] + 1] = 0
+    # weights_time[(np.shape(weights_time)//2)[0] - 1] = 0
+    # var_time = (np.sum(weights_time**2)/((np.sum(weights_time))**2))/(sub*num_chans)
+    # std_time = np.sqrt(var_time)
+
+    # weighted_mean_time = np.average(np.ma.getdata(acf_array)[:, :, np.shape(acf_array)[2]//2], weights=weights_time, axis=1)
+    # weighted_normed_time = weighted_mean_time/std_time
+
+    # weighted_loc_time = np.where(weighted_normed_time >= 10)[0]
+
+    # weights_left = np.arange(1, (sub//2) + 1)
+    # weights_right = np.arange((sub//2) +1)
+
+    # weights_freq = np.concatenate((np.flip(weights_left), weights_right))
+    # var_freq = (np.sum(weights_freq**2)/((np.sum(weights_freq))**2))/(sub*num_chans)
+    # std_freq = np.sqrt(var_freq)
+
+    # weighted_mean_freq = np.average(np.ma.getdata(acf_array)[:, np.shape(acf_array)[1]//2, :], weights=weights_freq, axis=1)
+    # weighted_normed_freq = weighted_mean_freq/std_freq
+
+    # weighted_loc_freq = np.where(weighted_normed_freq >= 3)[0]
+
+    # weighted_both = set(weighted_loc_time).intersection(set(weighted_loc_freq))
+
+    # plt.plot(weighted_normed_time)
+    # plt.show()
+    # plt.plot(weighted_normed_freq)
+    # plt.show()
 
 
     locs = set({})
@@ -1474,8 +1506,8 @@ def main():
         for j, freq in enumerate(f_wins):
 
 
-            means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq), \
-            int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time)].mean(axis=(1, 2))
+            means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq + 1), \
+            int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time + 1)].mean(axis=(1, 2))
 
 
             means.mask = np.zeros(np.shape(means))
@@ -1486,8 +1518,8 @@ def main():
                         means.mask[acf] = 1
 
 
-            N = (2*time)*(2*freq) - 3*(2*time)
-            stdev = 1/np.sqrt(N*(num_chans + 1)*(sub + 1))
+            N = ((2*time) + 1)*((2*freq) + 1) - 3*((2*time) + 1)
+            stdev = 1/np.sqrt(N*num_chans*sub)
 
 
 
@@ -1498,7 +1530,7 @@ def main():
             threshold_locs = np.where(acf_norm >= thresh_sigma)[0]
 
             for loc in threshold_locs:
-                if loc not in acfs_to_mask:
+                if loc not in acfs_to_mask: #and ((loc not in weighted_loc_freq) or (loc in weighted_both)): 
                     if loc not in locs:
                         if dm!=0:
                             burst = np.ma.array(np.transpose(dedispersed_data[loc*sub
@@ -1564,8 +1596,18 @@ def main():
 
         min_f_window = min(f_windows)
 
-        if (max_t <= prune_value/1000):
-            if min_f_window<=5:
+        acf = np.ma.getdata(candidate.acf)
+        acf[np.shape(acf)[0]//2, np.shape(acf)[1]//2] = 0
+        power_acf = acf**2
+
+        power_tot = np.sum(power_acf)
+        power_freq0 = np.sum(power_acf[np.shape(power_acf)[0]//2, :])
+
+        frac = power_freq0/power_tot
+
+        if frac <= 0.2:
+            if (max_t <= prune_value/1000):
+
                 prune_cand_list.append(candidate)
 
 
@@ -1621,6 +1663,8 @@ def main():
         pruned_cand_sorted = [cand for cand in pruned_cand_sorted if 
                                 pruned_cand_sorted.index(cand) 
                                 not in cands_to_remove]
+
+        pruned_cand_sorted = [cand for cand in pruned_cand_sorted if cand.cc_snr>=thresh_sigma]
 
 
 
@@ -1755,7 +1799,10 @@ def main():
 if __name__=='__main__':
     parser = ap.ArgumentParser()
 
-    parser.add_argument("--infile", help="Fits filename containing data.")
+    parser.add_argument("--infile", help=("PSRFITS or SIGPROC filterbank filename."
+                                          " Filename must end in .fits or .fil."  
+                                          " No filename should be passed if sim_data"
+                                          " is set to 1."))
 
     parser.add_argument("--sigma", help=("Search for peaks in the acf" 
                                         " above this threshold. Default = 10."), 
