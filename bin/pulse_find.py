@@ -1459,39 +1459,6 @@ def main():
     f_wins = np.linspace(min_f, int(num_chans/2), 10)
 
 
-    # weights_bottom = np.arange(1, (num_chans//2) + 1)
-    # weights_top = np.arange((num_chans//2) +1)
-
-    # weights_time = np.concatenate((np.flip(weights_bottom), weights_top))
-    # weights_time[(np.shape(weights_time)//2)[0] + 1] = 0
-    # weights_time[(np.shape(weights_time)//2)[0] - 1] = 0
-    # var_time = (np.sum(weights_time**2)/((np.sum(weights_time))**2))/(sub*num_chans)
-    # std_time = np.sqrt(var_time)
-
-    # weighted_mean_time = np.average(np.ma.getdata(acf_array)[:, :, np.shape(acf_array)[2]//2], weights=weights_time, axis=1)
-    # weighted_normed_time = weighted_mean_time/std_time
-
-    # weighted_loc_time = np.where(weighted_normed_time >= 10)[0]
-
-    # weights_left = np.arange(1, (sub//2) + 1)
-    # weights_right = np.arange((sub//2) +1)
-
-    # weights_freq = np.concatenate((np.flip(weights_left), weights_right))
-    # var_freq = (np.sum(weights_freq**2)/((np.sum(weights_freq))**2))/(sub*num_chans)
-    # std_freq = np.sqrt(var_freq)
-
-    # weighted_mean_freq = np.average(np.ma.getdata(acf_array)[:, np.shape(acf_array)[1]//2, :], weights=weights_freq, axis=1)
-    # weighted_normed_freq = weighted_mean_freq/std_freq
-
-    # weighted_loc_freq = np.where(weighted_normed_freq >= 3)[0]
-
-    # weighted_both = set(weighted_loc_time).intersection(set(weighted_loc_freq))
-
-    # plt.plot(weighted_normed_time)
-    # plt.show()
-    # plt.plot(weighted_normed_freq)
-    # plt.show()
-
 
     locs = set({})
     cand_dict = {}
@@ -1598,7 +1565,9 @@ def main():
 
         acf = np.ma.getdata(candidate.acf)
         acf[np.shape(acf)[0]//2, np.shape(acf)[1]//2] = 0
-        power_acf = acf**2
+
+        # scale by acf size to avoid underflow issues
+        power_acf = (num_chans*sub*acf)**2
 
         power_tot = np.sum(power_acf)
         power_freq0 = np.sum(power_acf[np.shape(power_acf)[0]//2, :])
