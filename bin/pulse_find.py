@@ -1444,15 +1444,16 @@ def main():
 
     acf_array.mask = np.zeros((int(total_time_samples/sub), 
                                 num_chans + 1, sub + 1), dtype=np.uint8)
-    acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/sub),
-                                                    sub + 1), dtype=np.uint8)
-    acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/sub)
-                                                    ,sub + 1), dtype=np.uint8)
-    acf_array.mask[:, center_freq_lag+1, :] = np.ones((int(total_time_samples/sub)
-                                                    ,sub + 1), dtype=np.uint8)
+    acf_array.mask[:, center_freq_lag, center_time_lag] = 1
+    # acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/sub),
+    #                                                 sub + 1), dtype=np.uint8)
+    # acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/sub)
+    #                                                 ,sub + 1), dtype=np.uint8)
+    # acf_array.mask[:, center_freq_lag+1, :] = np.ones((int(total_time_samples/sub)
+    #                                                 ,sub + 1), dtype=np.uint8)
 
     min_t = 1
-    min_f = 3
+    min_f = 1 #3
 
     t_wins = np.logspace(np.log2(min_t), np.log2(int(sub_int/2/time_samp)), 
                             10, base=2)
@@ -1485,7 +1486,7 @@ def main():
                         means.mask[acf] = 1
 
 
-            N = ((2*time) + 1)*((2*freq) + 1) - 3*((2*time) + 1)
+            N = ((2*time) + 1)*((2*freq) + 1) - 1 #3*((2*time) + 1)
             stdev = 1/np.sqrt(N*num_chans*sub)
 
 
@@ -1557,6 +1558,7 @@ def main():
         acf_window_where = candidate.acf_window[sigma_max]
 
         max_t = acf_window_where[0]*time_samp
+        max_f = acf_window_where[1]*chan_width
 
         t_windows = [window[0] for window in candidate.acf_window]
         f_windows = [window[1] for window in candidate.acf_window]
@@ -1574,9 +1576,9 @@ def main():
 
         frac = power_freq0/power_tot
 
-        if frac <= 0.2:
-            if (max_t <= prune_value/1000):
-
+        # if frac <= 0.2:
+        if (max_t <= prune_value/1000):
+            if max_f >= 0.1*chan_width*num_chans:
                 prune_cand_list.append(candidate)
 
 
@@ -1633,7 +1635,7 @@ def main():
                                 pruned_cand_sorted.index(cand) 
                                 not in cands_to_remove]
 
-        pruned_cand_sorted = [cand for cand in pruned_cand_sorted if cand.cc_snr>=thresh_sigma]
+        #pruned_cand_sorted = [cand for cand in pruned_cand_sorted if cand.cc_snr>=thresh_sigma]
 
 
 

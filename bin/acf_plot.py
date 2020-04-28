@@ -220,13 +220,13 @@ def main():
 
     # acf_to_plot = np.ma.getdata(acf_to_plot)
 
-    # power_acf = acf_to_plot**2
+    power_acf = acf_to_plot**2
 
-    # power_tot = np.sum(power_acf)
-    # power_freq0 = np.sum(power_acf[np.shape(power_acf)[0]//2, :])
+    power_tot = np.sum(power_acf)
+    power_freq0 = np.sum(power_acf[np.shape(power_acf)[0]//2, :])
 
-    # frac = power_freq0/power_tot
-    # print(frac)
+    frac = power_freq0/power_tot
+    print(frac)
 
     extent = [-bounds*time_samp*1000/2, 
             bounds*time_samp*1000/2, 
