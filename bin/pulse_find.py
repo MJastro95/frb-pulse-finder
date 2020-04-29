@@ -280,6 +280,7 @@ def process_acf(record, time_samp, chan_width,
     except FloatingPointError:
         bandpass_corr_record = np.zeros(np.shape(record))
 
+
     acf_array[index, :, :] = np.ma.array(np.array(auto_corr2d_fft(
                                         bandpass_corr_record, 
                                         np.shape(record)[1], dtype)[0]))
@@ -608,6 +609,7 @@ class Candidate:
         self.freq_center = freq_center
 
         self.cross_corr = False
+        self.cc_snr = 0
 
     def update_acf_windows(self, sigma, time, freq):
         """
@@ -1283,157 +1285,125 @@ def main():
 
 
 
-    if dm != 0: 
-
-
-        if filename[-4:]=="fits":
-
-
-            all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), 
-                                dtype=types[dtype])
-
-            for index, record in enumerate(data):
-                all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] \
-                                        = np.transpose(record[:,0,:,0])
-
-
-            if chan_width>0:
-                all_data = np.flip(all_data, axis=0)
-
-            chan_width = abs(chan_width)
-
-            burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, 
-                                num_chans, dm, ra_string, dec_string, tstart)
 
 
 
-            if zero_dm_filt:
-                data_mean = np.mean(data, axis=0)
-                data = data - data_mean                
+    if filename[-4:]=="fits":
 
 
-            print("\nPreprocessing data...")
-            if maskfile:
-                preprocess(np.transpose(all_data), burst_metadata, 
-                                        bandpass_avg, bandpass_std)
+        all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), 
+                            dtype=types[dtype])
+
+        for index, record in enumerate(data):
+            all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] \
+                                    = np.transpose(record[:,0,:,0])
 
 
-            print("\nPreprocessing complete!")
-            print("\n Dedispersing data using DM = " + str(dm) + " ...")
+        if chan_width>0:
+            all_data = np.flip(all_data, axis=0)
 
-            if interval is None:
-                dedispersed_data = np.transpose(dedisperse(all_data, dm, 
-                                                ctr_freq, chan_width, time_samp,
-                                                types[dtype]))
-            else:
-                dedispersed_data = np.transpose(dedisperse(all_data[:, 
-                                    int(np.shape(all_data)[1]*interval[0]): 
-                                    int(np.shape(all_data)[1]*interval[1])],
-                                    dm, ctr_freq, chan_width, time_samp, 
-                                    types[dtype]))
+        chan_width = abs(chan_width)
 
-            total_time_samples = np.shape(dedispersed_data)[0]
-            del all_data
-            del data
+        burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, 
+                            num_chans, dm, ra_string, dec_string, tstart)
+
+
+
+        if zero_dm_filt:
+            data_mean = np.mean(data, axis=0)
+            data = data - data_mean                
+
+
+        print("\nPreprocessing data...")
+        if maskfile:
+            preprocess(np.transpose(all_data), burst_metadata, 
+                                    bandpass_avg, bandpass_std)
+
+
+        print("\nPreprocessing complete!")
+        print("\n Dedispersing data using DM = " + str(dm) + " ...")
+
+        if interval is None:
+            dedispersed_data = np.transpose(dedisperse(all_data, dm, 
+                                            ctr_freq, chan_width, time_samp,
+                                            types[dtype]))
         else:
-            
-            if chan_width>0:
-                all_data = np.flip(data, axis=0)
+            dedispersed_data = np.transpose(dedisperse(all_data[:, 
+                                int(np.shape(all_data)[1]*interval[0]): 
+                                int(np.shape(all_data)[1]*interval[1])],
+                                dm, ctr_freq, chan_width, time_samp, 
+                                types[dtype]))
 
-            chan_width = abs(chan_width)
-            
-            burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, 
-                                num_chans, dm, ra_string, dec_string, tstart)   
+        total_time_samples = np.shape(dedispersed_data)[0]
+        del all_data
+        del data
+    else:
+        
+        if chan_width>0:
+            all_data = np.flip(data, axis=0)
 
-            if zero_dm_filt:
+        chan_width = abs(chan_width)
+        
+        burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, 
+                            num_chans, dm, ra_string, dec_string, tstart)   
 
-                data_mean = np.mean(data, axis=0)
-                data = data - data_mean
+        if zero_dm_filt:
 
-
-            print("\nPreprocessing data...")
-            if maskfile:
-                preprocess(np.transpose(data), burst_metadata, 
-                            bandpass_avg, bandpass_std)
-            print("\nPreprocessing complete!")
-
-
-            print("\n Dedispersing data using DM = " + str(dm) + " ...")
-
-            if interval is None:
-                dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, 
-                                    chan_width, time_samp, types[dtype]))
-            else:
-                dedispersed_data = np.transpose(dedisperse(data[:, 
-                                    int(np.shape(data)[1]*interval[0]): 
-                                    int(np.shape(data)[1]*interval[1])],
-                                    dm, ctr_freq, chan_width, time_samp, 
-                                    types[dtype]))
-
-            total_time_samples = np.shape(dedispersed_data)[0]
-            del data
-
-        print("\n Dedispersion complete!")
+            data_mean = np.mean(data, axis=0)
+            data = data - data_mean
 
 
+        print("\nPreprocessing data...")
+        if maskfile:
+            preprocess(np.transpose(data), burst_metadata, 
+                        bandpass_avg, bandpass_std)
+        print("\nPreprocessing complete!")
 
-        print("\n Processing ACFs of each data chunk...")
+
+        print("\n Dedispersing data using DM = " + str(dm) + " ...")
+
+        if interval is None:
+            dedispersed_data = np.transpose(dedisperse(data, dm, ctr_freq, 
+                                chan_width, time_samp, types[dtype]))
+        else:
+            dedispersed_data = np.transpose(dedisperse(data[:, 
+                                int(np.shape(data)[1]*interval[0]): 
+                                int(np.shape(data)[1]*interval[1])],
+                                dm, ctr_freq, chan_width, time_samp, 
+                                types[dtype]))
+
+        total_time_samples = np.shape(dedispersed_data)[0]
+        del data
+
+    print("\n Dedispersion complete!")
 
 
 
+    print("\n Processing ACFs of each data chunk...")
+
+
+    if time_to_plot==0:
         acf_array = np.ma.ones((int(total_time_samples/sub), 
                         num_chans + 1, sub + 1), dtype=np.float32)
-
-        means = []
-
         for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//sub)):
             record = dedispersed_data[index*sub:(index+1)*sub,:]
-
             process_acf(record, time_samp, 
                         chan_width, num_chans, 
                         index, acf_array, types[dtype])
-
-
-
-        print("\n\n ...processing complete!\n")
-
-
     else:
+        acf_array = np.ma.ones((1, num_chans+1, sub+1), dtype=np.float32)
 
-
-        if filename[-4:]=="fits":
-            all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), 
-                                dtype=types[dtype])
-
-            for index, record in enumerate(data):
-                all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] = \
-                        np.transpose(record[:,0,:,0])
-
-            all_data = np.transpose(all_data)
+        index = int(time_to_plot//sub_int)
+        record = dedispersed_data[index*sub:(index+1)*sub,:]
+        process_acf(record, time_samp, 
+                    chan_width, num_chans, 
+                    0, acf_array, types[dtype])
 
 
 
-        else:
-            #filterbank format
-
-            all_data = np.transpose(data)
+    print("\n\n ...processing complete!\n")
 
 
-
-
-
-        acf_array = np.ma.ones((int(total_time_samples/sub), num_chans + 1, 
-                                sub + 1), dtype=np.float32)
-        means = []            
-
-        print("\n Processing ACFs of each data chunk...")
-
-        for index in tqdm(np.arange(np.shape(all_data)[0]//sub)):
-            record = all_data[index*sub:(index+1)*sub,:]
-            process_acf(record, time_samp, chan_width, num_chans, 
-                            index, acf_array, types[dtype])
-
-        print("\n\n ...processing complete!\n")
 
 
 
@@ -1494,49 +1464,45 @@ def main():
             acf_norm = means/stdev
 
     
-
-            threshold_locs = np.where(acf_norm >= thresh_sigma)[0]
+            if time_to_plot==0:
+                threshold_locs = np.where(acf_norm >= thresh_sigma)[0]
+            else:
+                threshold_locs = [int(time_to_plot//sub_int)]
 
             for loc in threshold_locs:
-                if loc not in acfs_to_mask: #and ((loc not in weighted_loc_freq) or (loc in weighted_both)): 
+                if loc not in acfs_to_mask: 
                     if loc not in locs:
-                        if dm!=0:
-                            burst = np.ma.array(np.transpose(dedispersed_data[loc*sub
-                                                                :(loc+1)*sub, :]))
+                        burst = np.ma.array(np.transpose(dedispersed_data[loc*sub
+                                                            :(loc+1)*sub, :]))
 
-                            burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
+                        burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
 
-                            burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
+                        burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
 
-                            for chan in mask_chan:
-                                burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
+                        for chan in mask_chan:
+                            burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
 
+                        if time_to_plot==0:
                             candidate = Candidate(loc, 
                                         np.round(abs(acf_norm[loc]), decimals=2),
                                         burst, acf_array[loc], burst_metadata, 
                                         0, 0, False, (time, freq), 0)
-
                         else:
-                            burst = np.ma.array(np.transpose(all_data[loc*sub:(loc+1)*sub, :]))
-                            burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
-
-
-                            burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
-
-                            for chan in mask_chan:
-                                burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
-
                             candidate = Candidate(loc, 
-                                        np.round(abs(acf_norm[loc]), decimals=2),
-                                        burst, acf_array[loc], burst_metadata, 
-                                        0, 0, False, (time, freq), 0)
+                                        np.round(abs(acf_norm[0]), decimals=2),
+                                        burst, acf_array[0], burst_metadata, 
+                                        0, 0, False, (time, freq), 0)       
+
 
                         cand_dict[loc] = candidate
                         locs.add(loc)
 
                     else:
 
-                        cand_dict[loc].update_acf_windows(acf_norm[loc], time, freq)
+                        if time_to_plot==0:
+                            cand_dict[loc].update_acf_windows(acf_norm[loc], time, freq)
+                        else:
+                            cand_dict[loc].update_acf_windows(acf_norm[0], time, freq)
 
 
 
@@ -1544,6 +1510,19 @@ def main():
 
 
     cand_list = [cand_dict[key] for key in cand_dict]
+
+    if time_to_plot!=0:
+        candidate = cand_list[0]
+        candidate.location *= sub_int
+        np.save(str(outfilename) + "_" + 
+        str(np.around(time_to_plot, decimals=2)) 
+        + "s_" + "burst", 
+        [candidate], 
+        allow_pickle=True)
+
+        sys.exit("Plot saved as {}".format(str(outfilename) + "_" + 
+        str(np.around(time_to_plot, decimals=2)) 
+        + "s_" + "burst.npy"))
 
 
 
@@ -1831,6 +1810,14 @@ if __name__=='__main__':
                                                 " ACF window with the dynamic"
                                                 " spectrum."), type=int, default=0)
 
+    parser.add_argument("--time", help=("Single time to calculate the ACF of."
+                                        " The ACF is taken of the chunk of data"
+                                        " which the time corresponds to."
+                                        " Default is zero, which runs the normal"
+                                        " program, which takes ACFs of entire"
+                                        " dataset."),
+                                        type=float, default=0)
+
     parser.add_argument("outfile", help="String to append to output files.", 
                                                                     default='')
 
@@ -1851,6 +1838,8 @@ if __name__=='__main__':
     interval = args.interval
     zero_dm_filt = args.zero_dm_filt
     cross_corr = args.cross_corr
+    time_to_plot = args.time
+
 
 
 

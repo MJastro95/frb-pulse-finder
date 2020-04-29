@@ -218,7 +218,7 @@ def main():
     acf_to_plot = acf[:, 
                 axis2_center - int(bounds/2): axis2_center + int(bounds/2) + 1]
 
-    # acf_to_plot = np.ma.getdata(acf_to_plot)
+    acf_to_plot = np.ma.getdata(acf_to_plot)
 
     power_acf = acf_to_plot**2
 
