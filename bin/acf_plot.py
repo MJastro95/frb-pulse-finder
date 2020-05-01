@@ -454,6 +454,7 @@ def main():
         plt.show()
 
 
+
     if fit != '':
 
         if fit=='gaussian' or fit=='Gaussian':

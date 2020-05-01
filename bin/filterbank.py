@@ -3,7 +3,7 @@ import struct
 import matplotlib.pyplot as plt
 import os
 
-types = {'8':np.uint8, '16':np.uint16,'32':np.uint32, '64':np.uint64}
+types = {'8':np.uint8, '16':np.uint16,'32':np.float32, '64':np.float64}
 
 def filterbank_parse(infile, loop_index, split):
 	with open(infile, 'rb') as file:

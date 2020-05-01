@@ -243,7 +243,7 @@ def process_acf(record, time_samp, chan_width,
         # 'ringing' in the autocorrelation function from the masked
         # channels. One can not simply take the autocorrelation of 
         # masked data using the FFT method because the FFT algorithm
-        # implicityly assumes uniformly sampled data.
+        # implicitly assumes uniformly sampled data.
 
         median = np.median(record_ravel[record_nonzero])
         med_dev = mad(record_ravel[record_nonzero])
@@ -1450,10 +1450,10 @@ def main():
 
             means.mask = np.zeros(np.shape(means))
 
-            if maskfile:
-                for acf in acfs_to_mask:
-                    if acf<=np.shape(means)[0]:
-                        means.mask[acf] = 1
+            # if maskfile:
+            #     for acf in acfs_to_mask:
+            #         if acf<=np.shape(means)[0]:
+            #             means.mask[acf] = 1
 
 
             N = ((2*time) + 1)*((2*freq) + 1) - 1 #3*((2*time) + 1)
@@ -1470,7 +1470,7 @@ def main():
                 threshold_locs = [int(time_to_plot//sub_int)]
 
             for loc in threshold_locs:
-                if loc not in acfs_to_mask: 
+                if (loc not in acfs_to_mask) or (time_to_plot!=0): 
                     if loc not in locs:
                         burst = np.ma.array(np.transpose(dedispersed_data[loc*sub
                                                             :(loc+1)*sub, :]))
@@ -1585,8 +1585,11 @@ def main():
 
             burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
 
+            # mask any zeros in dynamic spectrum
             burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
 
+            # explicitly mask channels provided by rfifind mask and
+            # ignorechan argument
             for chan in mask_chan:
                 burst[int(chan), :].mask = np.ones(np.shape(burst)[1], 
                                                         dtype=np.uint8)
