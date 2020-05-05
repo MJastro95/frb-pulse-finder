@@ -37,7 +37,7 @@ To generate a diagnostic plot from the pickled data, the following command can b
 	python acf_plot.py <outfilename>_<time_of_burst>s_burst.npy.
 
 which will generate a plot which looks like the following,
-!(images/acf_ex.png)
+![Alt text](images/acf_ex.png)
 
 
 
