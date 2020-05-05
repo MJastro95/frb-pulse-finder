@@ -6,7 +6,7 @@ import os
 import numpy as np 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-mpl.use("TkAgg")
+#mpl.use("TkAgg")
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import argparse as ap 
 from astropy.io import fits
@@ -1152,7 +1152,7 @@ def main():
 
         else: # read in sigproc filterbank data
             data, sub_int_orig, ctr_freq, chan_width, \
-            time_samp, ra_val, dec_val, tstart, dtype = fb.filterbank_parse(filename, 0, 1)
+            time_samp, ra_val, dec_val, tstart, dtype = fb.filterbank_parse(filename)#, 0, 1)
 
             dtype=str(dtype)
 
@@ -1240,7 +1240,9 @@ def main():
 
         global ignore
 
-
+        # presto indexes assuming first frequency channel is lowest 
+        # this program assumed that first frequency channel is highest, 
+        # so need to adjust the indices of the masked channels to reflect that
         mask_chan = [str(num_chans - chan - 1) for chan in mask_chan]
 
         for val in ignore:
@@ -1300,6 +1302,8 @@ def main():
 
 
         if chan_width>0:
+            # if data is ordered with ascending frequency
+            # flip so that descending order is used.
             all_data = np.flip(all_data, axis=0)
 
         chan_width = abs(chan_width)
@@ -1340,6 +1344,8 @@ def main():
     else:
         
         if chan_width>0:
+            # if data is ordered with ascending frequency
+            # flip so that descending order is used.
             all_data = np.flip(data, axis=0)
 
         chan_width = abs(chan_width)
@@ -1383,6 +1389,7 @@ def main():
 
 
     if time_to_plot==0:
+        # calculate acf of single provided time
         acf_array = np.ma.ones((int(total_time_samples/sub), 
                         num_chans + 1, sub + 1), dtype=np.float32)
         for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//sub)):
@@ -1391,6 +1398,7 @@ def main():
                         chan_width, num_chans, 
                         index, acf_array, types[dtype])
     else:
+        # calculate acfs of entire dataset
         acf_array = np.ma.ones((1, num_chans+1, sub+1), dtype=np.float32)
 
         index = int(time_to_plot//sub_int)
@@ -1415,12 +1423,6 @@ def main():
     acf_array.mask = np.zeros((int(total_time_samples/sub), 
                                 num_chans + 1, sub + 1), dtype=np.uint8)
     acf_array.mask[:, center_freq_lag, center_time_lag] = 1
-    # acf_array.mask[:, center_freq_lag, :] = np.ones((int(total_time_samples/sub),
-    #                                                 sub + 1), dtype=np.uint8)
-    # acf_array.mask[:, center_freq_lag-1, :] = np.ones((int(total_time_samples/sub)
-    #                                                 ,sub + 1), dtype=np.uint8)
-    # acf_array.mask[:, center_freq_lag+1, :] = np.ones((int(total_time_samples/sub)
-    #                                                 ,sub + 1), dtype=np.uint8)
 
     min_t = 1
     min_f = 1 #3
@@ -1449,11 +1451,6 @@ def main():
 
 
             means.mask = np.zeros(np.shape(means))
-
-            # if maskfile:
-            #     for acf in acfs_to_mask:
-            #         if acf<=np.shape(means)[0]:
-            #             means.mask[acf] = 1
 
 
             N = ((2*time) + 1)*((2*freq) + 1) - 1 #3*((2*time) + 1)
@@ -1512,6 +1509,7 @@ def main():
     cand_list = [cand_dict[key] for key in cand_dict]
 
     if time_to_plot!=0:
+        # save single acf tp disk and exit
         candidate = cand_list[0]
         candidate.location *= sub_int
         np.save(str(outfilename) + "_" + 
@@ -1533,6 +1531,7 @@ def main():
     prune_cand_list = []
     for candidate in cand_list:
 
+        # prune candidates
         sigma_max = candidate.sigma.index(max(candidate.sigma))
         acf_window_where = candidate.acf_window[sigma_max]
 
@@ -1767,7 +1766,7 @@ if __name__=='__main__':
                                      " is already dedispersed."), 
                                     type=float, default=0)
 
-    parser.add_argument("--plot", help=("Use interactive plotting feature"
+    parser.add_argument("--plot", help=("1: Use interactive plotting feature"
                                         " to view bursts. Default=0."
                                         " Set to one for interactive plotting."), 
                                         type=int, default=0)
@@ -1777,7 +1776,7 @@ if __name__=='__main__':
                                             " when processing."), 
                                             type=str, nargs="+", default=None)
 
-    parser.add_argument("--sim_data", help=("Run ACF analysis on simulated data."
+    parser.add_argument("--sim_data", help=("1: Run ACF analysis on simulated data."
                                         " Default=0: do not run simulated data."), 
                                         type=int, default=0)
 
@@ -1801,16 +1800,16 @@ if __name__=='__main__':
                                             " entire observation.)"), 
                                             nargs=2, type=float, default=None)
 
-    parser.add_argument("--zero_dm_filt", help=("Use a zero DM filter to remove" 
+    parser.add_argument("--zero_dm_filt", help=("1: Use a zero DM filter to remove" 
                                             " broadband RFI in the dispersed data." 
                                             " Default=0: do not use zero DM filter."), 
                                             type=int, default=0)
 
-    parser.add_argument("--cross_corr", help=("Find the pulse arrival time and"
+    parser.add_argument("--cross_corr", help=("1: Find the pulse arrival time and"
                                               " frequency center by cross correlating"
-                                              " boxcar with time and frequency" 
+                                              " boxcar, with time and frequency" 
                                                 " widths equal to the best fit"
-                                                " ACF window with the dynamic"
+                                                " ACF window width, with the dynamic"
                                                 " spectrum."), type=int, default=0)
 
     parser.add_argument("--time", help=("Single time to calculate the ACF of."

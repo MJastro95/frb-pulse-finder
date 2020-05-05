@@ -130,7 +130,7 @@ def main():
                                     " to fit autocorrelation function.", 
                                     type=float, nargs="+", default=None)
 
-    parser.add_argument("--mask", help="PRESTO rfifind mask")
+    # parser.add_argument("--mask", help="PRESTO rfifind mask")
 
     parser.add_argument("--rect_plot", help="Plot rectangle used for cross correlation around center of burst.",type=int, default=0)
 
@@ -140,7 +140,7 @@ def main():
     fit = args.fit
     bounds = args.bounds
     p0 = args.p0
-    maskfile = args.mask
+    # maskfile = args.mask
     rect_plot = args.rect_plot
 
     # candidates are pickled as a list with the only element 
@@ -173,20 +173,20 @@ def main():
 
     data_shape = np.shape(burst)
 
-    if maskfile:
-        # read in maskfile if it has been provided and set channels to ignore
+    # if maskfile:
+    #     # read in maskfile if it has been provided and set channels to ignore
 
-        mask = rfifind(maskfile)
-        dtint, mask_chan, mask_int = mask.read_mask()
+    #     mask = rfifind(maskfile)
+    #     dtint, mask_chan, mask_int = mask.read_mask()
 
-        burst = np.ma.array(burst)
+    #     burst = np.ma.array(burst)
 
-        np_mask = np.zeros(np.shape(burst))
+    #     np_mask = np.zeros(np.shape(burst))
 
-        for chan in mask_chan:
-            np_mask[chan,:] = np.ones(np.shape(burst)[1])
+    #     for chan in mask_chan:
+    #         np_mask[chan,:] = np.ones(np.shape(burst)[1])
 
-        burst.mask = np_mask
+    #     burst.mask = np_mask
 
 
 
