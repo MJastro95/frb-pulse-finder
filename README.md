@@ -1,6 +1,8 @@
 
 Pulse finder is a collection of python executables and scripts that searches for single pulses from fast radio bursts with a known dispersion measure. The main executable pulse_find.py works by taking an autocorrelation function of the intensity data located in a PSRFITS or filterbank file, and comparing that autocorrelation function to what would be expected from noise to detect candidates.
 
+Specifically, it takes the mean of the autocorrelation function in a rectangular range (which we refer to as *boxcars*) around the central lag, using various widths and heights. The value obtained for the mean is then normalized by subtracting the expected value of the mean and dividing by the standard deviation. The resulting normalized value is referred to as the signal-to-noise ratio of the ACF for that particular boxcar. Candidates are then found by recording signal-to-noise ratios which exceed a threshold level as specfied on the command line, and the best-fit boxcar is determined as the one which maximizes the ACF signal-to-noise ratio for a given chunk of data. 
+
 Written using python 3.7.6, although any version of python3 should probably work.
 
 
@@ -36,9 +38,8 @@ To generate a diagnostic plot from the pickled data, the following command can b
 	
 	python acf_plot.py <outfilename>_<time_of_burst>s_burst.npy.
 
-which will generate a plot which looks like the following,
+which will generate a plot which looks like the following:
 ![Alt text](images/acf_ex.png)
 
-
-
+The diagnostic plot lists pertinent metadata for the observation, and plots the dynamic spectrum, autocorrelation function, and the signal to noise ratio of the autocorrelation function mean stastistic for the given time and frequency width.
 
