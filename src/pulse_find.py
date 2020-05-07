@@ -19,6 +19,7 @@ from tqdm import tqdm
 from scipy.optimize import curve_fit
 import filterbank as fb
 from sim_burst import simulatedData
+from low_pass import LowPassFilter
 
 np.seterr(all='raise')
 
@@ -108,6 +109,12 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
 
         spec = spec_2d[search_width*int(i):search_width*int(i+1)]
 
+        # fig = plt.figure(figsize=(10,8), dpi=100)
+        # ax1 = fig.add_axes([0.2, 0.05, 0.75, 0.9])
+        # ax2 = fig.add_axes([0.05, 0.05, 0.1, 0.9])
+        # ax1.imshow(spec, aspect='auto')
+        # ax2.plot(np.flip(np.mean(spec, axis=1)), np.arange(64))
+        # plt.show()
 
         median = np.median(spec)
         med_dev = mad(spec, axis=None)
@@ -126,7 +133,24 @@ def auto_corr2d_fft(spec_2d, search_width, dtype):
 
         burst_fft = np.fft.fft2(((zero_padded_spec) - median)/(med_dev))
         burst_fft_conj = np.conj(burst_fft)
-        acf = np.real(np.fft.ifft2(burst_fft*burst_fft_conj))/(shape[0]*shape[1])
+
+        power_spec = burst_fft*burst_fft_conj
+
+
+
+        # lpf = LowPassFilter(power_spec, 10, 16)
+        # lpf.reshape_power_spec()
+
+        # plt.imshow(np.real(lpf.reshaped_power_spec), aspect='auto')
+        # plt.show()
+
+        # filt_powspec = lpf.apply_filter(filt='gauss')
+
+        # plt.imshow(np.real(lpf.filt_pow_spec), aspect='auto')
+        # plt.show()
+
+
+        acf = np.real(np.fft.ifft2(power_spec)/(shape[0]*shape[1]))
 
         # The 2d acf returned via a the fft2 method is the same shape as the
         # input array. However, it is not automatically structured correctly,
@@ -218,6 +242,8 @@ def process_acf(record, time_samp, chan_width,
         None 
     """
     record = np.transpose(record)
+    # plt.imshow(record, aspect='auto')
+    # plt.show()
 
     # Represent masked data with zeros.
     if len(ignore) != 0:
@@ -277,6 +303,20 @@ def process_acf(record, time_samp, chan_width,
 
     try:
         bandpass_corr_record = np.transpose((np.transpose(record) - median)/med_dev)
+        freq_mean = np.mean(bandpass_corr_record, axis=1)
+        where = np.where(freq_mean>= (5/np.sqrt(sub)))
+        where_num = np.shape(where)[1]
+        if where_num<=3:
+            if where_num==1:
+                size=sub
+            else:
+                size=(where_num, sub)
+            bandpass_corr_record[where,:] = np.random.normal(loc=0, scale=1, size=size)
+
+
+        # plt.imshow(record, aspect='auto')
+        # plt.show()
+
     except FloatingPointError:
         bandpass_corr_record = np.zeros(np.shape(record))
 
@@ -1422,7 +1462,8 @@ def main():
 
     acf_array.mask = np.zeros((int(total_time_samples/sub), 
                                 num_chans + 1, sub + 1), dtype=np.uint8)
-    acf_array.mask[:, center_freq_lag, center_time_lag] = 1
+    #acf_array.mask[:, :, center_time_lag] = 1
+    acf_array.mask[:, center_freq_lag, :] = 1
 
     min_t = 1
     min_f = 1 #3
@@ -1450,10 +1491,10 @@ def main():
             int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time + 1)].mean(axis=(1, 2))
 
 
-            means.mask = np.zeros(np.shape(means))
+            #means.mask = np.zeros(np.shape(means))
 
 
-            N = ((2*time) + 1)*((2*freq) + 1) - 1 #3*((2*time) + 1)
+            N = ((2*time) + 1)*((2*freq) + 1) - ((2*time) + 1)#1 #3*((2*time) + 1)
             stdev = 1/np.sqrt(N*num_chans*sub)
 
 

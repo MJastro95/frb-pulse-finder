@@ -3,7 +3,7 @@
 
 import numpy as np 
 import matplotlib as mpl
-mpl.use("TkAgg")
+#mpl.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle as r
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -218,7 +218,7 @@ def main():
     acf_to_plot = acf[:, 
                 axis2_center - int(bounds/2): axis2_center + int(bounds/2) + 1]
 
-    acf_to_plot = np.ma.getdata(acf_to_plot)
+    # acf_to_plot = np.ma.getdata(acf_to_plot)
 
     power_acf = acf_to_plot**2
 
@@ -226,7 +226,7 @@ def main():
     power_freq0 = np.sum(power_acf[np.shape(power_acf)[0]//2, :])
 
     frac = power_freq0/power_tot
-    print(frac)
+    #print(frac)
 
     extent = [-bounds*time_samp*1000/2, 
             bounds*time_samp*1000/2, 
@@ -350,8 +350,8 @@ def main():
 
     axbottom2 = divider.append_axes("bottom", size=1.2, pad=0.3, sharex=ax2)
 
-    median = np.median(np.mean(burst, axis=0))
-    med_dev = mad(np.mean(burst, axis=0))
+    median = np.ma.median(np.ma.mean(burst, axis=0))
+    med_dev = mad(np.ma.mean(burst, axis=0))
 
     axbottom2.plot(time_array,(np.mean(burst,axis=0)-median)/med_dev, 
                     mfc="k", ms=1, mec="k", color='grey')
