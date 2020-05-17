@@ -241,9 +241,7 @@ def process_acf(record, time_samp, chan_width,
     Returns:
         None 
     """
-    record = np.transpose(record)
-    # plt.imshow(record, aspect='auto')
-    # plt.show()
+    record_T = np.transpose(record)
 
     # Represent masked data with zeros.
     if len(ignore) != 0:
@@ -251,17 +249,17 @@ def process_acf(record, time_samp, chan_width,
             value = value.split(":")
 
             if len(value)==1:
-                record[int(value[0]),:] = 0
+                record_T[int(value[0]),:] = 0
 
             else:
 
                 begin = value[0]
                 end = value[1]
 
-                record[int(begin):int(end), :] = 0
+                record_T[int(begin):int(end), :] = 0
 
-    record_ravel = record.ravel()
-    record_nonzero=np.where(record.ravel()!=0)
+    record_ravel = record_T.ravel()
+    record_nonzero=np.where(record_T.ravel()!=0)
 
     try:
         # Replace masked data with a sampling of noise consistent
@@ -278,8 +276,8 @@ def process_acf(record, time_samp, chan_width,
                                          size=np.shape(record_zero)[1])
 
         record_ravel[record_zero] = normal_draw
-        record = np.reshape(record_ravel, (np.shape(record)[0], 
-                                            np.shape(record)[1]))
+        record_T = np.reshape(record_ravel, (np.shape(record_T)[0], 
+                                            np.shape(record_T)[1]))
 
     except FloatingPointError:
         median=0
@@ -289,8 +287,8 @@ def process_acf(record, time_samp, chan_width,
                                         size=np.shape(record_zero)[1])
 
         record_ravel[record_zero] = normal_draw
-        record = np.reshape(record_ravel, (np.shape(record)[0], 
-                                            np.shape(record)[1]))
+        record_T = np.reshape(record_ravel, (np.shape(record_T)[0], 
+                                            np.shape(record_T)[1]))
 
 
     # Correct for the bandpass of the telescope by 
@@ -298,11 +296,11 @@ def process_acf(record, time_samp, chan_width,
     # is not done, then there is again 'ringing' in the acf
     # due to the frequency dependant baseline changes.
 
-    median = np.median(record, axis=1)
-    med_dev = mad(record, axis=1)
+    median = np.median(record_T, axis=1)
+    med_dev = mad(record_T, axis=1)
 
     try:
-        bandpass_corr_record = np.transpose((np.transpose(record) - median)/med_dev)
+        bandpass_corr_record = np.transpose((np.transpose(record_T) - median)/med_dev)
         freq_mean = np.mean(bandpass_corr_record, axis=1)
         where = np.where(freq_mean>= (5/np.sqrt(sub)))
         where_num = np.shape(where)[1]
@@ -312,19 +310,19 @@ def process_acf(record, time_samp, chan_width,
             else:
                 size=(where_num, sub)
             bandpass_corr_record[where,:] = np.random.normal(loc=0, scale=1, size=size)
+            record[:, where] = 0
 
 
-        # plt.imshow(record, aspect='auto')
-        # plt.show()
 
     except FloatingPointError:
-        bandpass_corr_record = np.zeros(np.shape(record))
+        bandpass_corr_record = np.zeros(np.shape(record_T))
+
 
 
     acf_array[index, :, :] = np.ma.array(np.array(auto_corr2d_fft(
                                         bandpass_corr_record, 
-                                        np.shape(record)[1], dtype)[0]))
-   
+                                        np.shape(record_T)[1], dtype)[0]))
+
 
     return
 
@@ -504,14 +502,16 @@ def print_candidates(total_candidates_sorted, burst_metadata):
         
 
 
-    print("*******************************************************************************************************************************************")
-    print("*******************************************************************************************************************************************\n")    
+    print("********************************************************************************************************************************************")
+    print("********************************************************************************************************************************************\n")    
 
 
     if len(total_candidates_sorted)!= 0:
         np.save(outfilename + "_bursts", total_candidates_sorted, 
                 allow_pickle=True)
-
+    else:
+        with open(outfilename + "_detected_bursts.txt", 'w') as f:
+            f.write("No bursts found :(")
     return 
 
 
@@ -1176,6 +1176,8 @@ def main():
 
     if flag==0: # read in real data
 
+        print("Reading data from {}".format(filename))
+
         if filename[-4:]=='fits':
             #read in fits data and parse for data
             #data is assumed to have structure of (subchunk, time, ~, freq, ~)
@@ -1429,7 +1431,7 @@ def main():
 
 
     if time_to_plot==0:
-        # calculate acf of single provided time
+        # calculate acfs of entire dataset
         acf_array = np.ma.ones((int(total_time_samples/sub), 
                         num_chans + 1, sub + 1), dtype=np.float32)
         for index in tqdm(np.arange(np.shape(dedispersed_data)[0]//sub)):
@@ -1437,8 +1439,9 @@ def main():
             process_acf(record, time_samp, 
                         chan_width, num_chans, 
                         index, acf_array, types[dtype])
+            dedispersed_data[index*sub:(index+1)*sub,:]=record
     else:
-        # calculate acfs of entire dataset
+        # calculate acf of single provided time
         acf_array = np.ma.ones((1, num_chans+1, sub+1), dtype=np.float32)
 
         index = int(time_to_plot//sub_int)
@@ -1463,8 +1466,8 @@ def main():
     acf_array.mask = np.zeros((int(total_time_samples/sub), 
                                 num_chans + 1, sub + 1), dtype=np.uint8)
     #acf_array.mask[:, :, center_time_lag] = 1
-    acf_array.mask[:, center_freq_lag, :] = 1
-
+    #acf_array.mask[:, center_freq_lag, :] = 1
+    acf_array.mask[:, center_freq_lag, center_time_lag] = 1
     min_t = 1
     min_f = 1 #3
 
@@ -1494,7 +1497,7 @@ def main():
             #means.mask = np.zeros(np.shape(means))
 
 
-            N = ((2*time) + 1)*((2*freq) + 1) - ((2*time) + 1)#1 #3*((2*time) + 1)
+            N = ((2*time) + 1)*((2*freq) + 1) - 1#((2*time) + 1)#1 #3*((2*time) + 1)
             stdev = 1/np.sqrt(N*num_chans*sub)
 
 
@@ -1515,9 +1518,9 @@ def main():
 
                         burst.mask = np.zeros(np.shape(burst), dtype=np.uint8)
 
-                        burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst)
+                        burst = np.ma.masked_where(np.ma.getdata(burst)==0, burst) # mask zeros
 
-                        for chan in mask_chan:
+                        for chan in mask_chan: # mask channels provided by mask and ignorechan
                             burst[int(chan), :].mask = np.ones(np.shape(burst)[1], dtype=np.uint8)
 
                         if time_to_plot==0:
@@ -1597,7 +1600,7 @@ def main():
 
         # if frac <= 0.2:
         if (max_t <= prune_value/1000):
-            if max_f >= 0.1*chan_width*num_chans:
+            if max_f >= 0.05*chan_width*num_chans:
                 prune_cand_list.append(candidate)
 
 
