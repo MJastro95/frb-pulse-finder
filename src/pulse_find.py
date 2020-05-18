@@ -1471,7 +1471,10 @@ def main():
     min_t = 1
     min_f = 1 #3
 
-    num_win = 10
+    if not fine:
+        num_win = 10
+    else:
+        num_win = 20
 
     t_wins = np.logspace(np.log2(min_t), np.log2(int(sub_int/2/time_samp)), 
                             num_win, base=2)
@@ -1887,6 +1890,9 @@ if __name__=='__main__':
                                         " program, which takes ACFs of entire"
                                         " dataset."),
                                         type=float, default=0)
+    parser.add_argument("--fine", help=("Whether or not to use a fine grid for"
+                                        " the ACF mean calculation. Default is zero,"
+                                        " don't use a fine grid."), type=int, default=0)
 
     parser.add_argument("outfile", help="String to append to output files.", 
                                                                     default='')
@@ -1909,6 +1915,7 @@ if __name__=='__main__':
     zero_dm_filt = args.zero_dm_filt
     cross_corr = args.cross_corr
     time_to_plot = args.time
+    fine = args.fine
 
 
 
