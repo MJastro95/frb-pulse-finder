@@ -1471,9 +1471,11 @@ def main():
     min_t = 1
     min_f = 1 #3
 
+    num_win = 10
+
     t_wins = np.logspace(np.log2(min_t), np.log2(int(sub_int/2/time_samp)), 
-                            10, base=2)
-    f_wins = np.linspace(min_f, int(num_chans/2), 10)
+                            num_win, base=2)
+    f_wins = np.linspace(min_f, int(num_chans/2), num_win)
 
 
 
@@ -1482,17 +1484,25 @@ def main():
     acf_shape = np.shape(acf_array[0,:,:])
 
 
-
+    mean_array = np.ma.ones(np.shape(acf_array[0]))
     np.seterr(all='ignore')
 
     print("Calculating ACF means...")
     for i, time in enumerate(tqdm(t_wins)):
         for j, freq in enumerate(f_wins):
 
+            if i==0 and j==0:
 
-            means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq + 1), \
-            int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time + 1)].mean(axis=(1, 2))
+                means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq + 1), \
+                int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time + 1)].mean(axis=(1, 2))
 
+            else:
+                acf_array.mask[:,int(acf_shape[0]/2 - f_wins[j-1]): int(acf_shape[0]/2 + f_wins[j-1] + 1)
+                                ,int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time + 1)] = 1
+
+                means = (t_wins[i]*f_wins[j-1]*mean_array + np.sum(acf_array, axis=(1,2)))/f_wins[j]*t_wins[i]
+
+            mean_array = means
 
             #means.mask = np.zeros(np.shape(means))
 
