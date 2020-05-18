@@ -1489,25 +1489,39 @@ def main():
 
     print("Calculating ACF means...")
     for i, time in enumerate(tqdm(t_wins)):
+
         for j, freq in enumerate(f_wins):
 
-            if i==0 and j==0:
+            if j==0:
 
-                means = acf_array[:,int(acf_shape[0]/2 - freq): int(acf_shape[0]/2 + freq + 1), \
-                int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time + 1)].mean(axis=(1, 2))
-
+                means = acf_array[:,acf_shape[0]//2 - int(freq): acf_shape[0]//2 + int(freq) + 1, \
+                acf_shape[1]//2 - int(time): acf_shape[1]//2 + int(time) + 1].mean(axis=(1, 2))
+        
             else:
-                acf_array.mask[:,int(acf_shape[0]/2 - f_wins[j-1]): int(acf_shape[0]/2 + f_wins[j-1] + 1)
-                                ,int(acf_shape[1]/2 - time): int(acf_shape[1]/2 + time + 1)] = 1
+                last_freq = 2*int(f_wins[j-1]) + 1
+                last_time = 2*int(t_wins[i]) + 1
+                last_tot = last_freq*last_time - 1
 
-                means = (t_wins[i]*f_wins[j-1]*mean_array + np.sum(acf_array, axis=(1,2)))/f_wins[j]*t_wins[i]
+                current_tot = (2*int(freq) + 1)*(2*int(time) + 1) - 1
+
+                total_sum = np.sum(acf_array[:, 
+                                            acf_shape[0]//2 - int(freq):acf_shape[0]//2 - int(f_wins[j-1]),
+                                            acf_shape[1]//2 - int(time): acf_shape[1]//2 + int(time) + 1], axis=(1,2)) \
+                            + np.sum(acf_array[:,
+                                                acf_shape[0]//2 + int(f_wins[j-1]) + 1:acf_shape[0]//2 + int(freq) + 1,
+                                                acf_shape[1]//2 - int(time): acf_shape[1]//2 + int(time + 1)], axis=(1,2))
+
+                means = (last_tot*mean_array + total_sum)/current_tot
+
+            # plt.imshow(acf_array[0,:,:], aspect='auto')
+            # plt.show()
 
             mean_array = means
 
             #means.mask = np.zeros(np.shape(means))
 
 
-            N = ((2*time) + 1)*((2*freq) + 1) - 1#((2*time) + 1)#1 #3*((2*time) + 1)
+            N = ((2*int(time)) + 1)*((2*int(freq)) + 1) - 1#((2*time) + 1)#1 #3*((2*time) + 1)
             stdev = 1/np.sqrt(N*num_chans*sub)
 
 
