@@ -1496,11 +1496,13 @@ def main():
         for j, freq in enumerate(f_wins):
 
             if j==0:
-
+                # if first frequency window for given time window 
+                # calculate mean normally
                 means = acf_array[:,acf_shape[0]//2 - int(freq): acf_shape[0]//2 + int(freq) + 1, \
                 acf_shape[1]//2 - int(time): acf_shape[1]//2 + int(time) + 1].mean(axis=(1, 2))
         
             else:
+                # otherwise reuse the previous mean calculation for the new one.
                 last_freq = 2*int(f_wins[j-1]) + 1
                 last_time = 2*int(t_wins[i]) + 1
                 last_tot = last_freq*last_time - 1
@@ -1516,13 +1518,8 @@ def main():
 
                 means = (last_tot*mean_array + total_sum)/current_tot
 
-            # plt.imshow(acf_array[0,:,:], aspect='auto')
-            # plt.show()
 
             mean_array = means
-
-            #means.mask = np.zeros(np.shape(means))
-
 
             N = ((2*int(time)) + 1)*((2*int(freq)) + 1) - 1#((2*time) + 1)#1 #3*((2*time) + 1)
             stdev = 1/np.sqrt(N*num_chans*sub)
