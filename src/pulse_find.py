@@ -300,10 +300,7 @@ def process_acf(record, time_samp, chan_width,
 
     try:
         bandpass_corr_record = np.transpose((np.transpose(record_T) - median)/med_dev)
-        plt.imshow(bandpass_corr_record, aspect='auto')
-        plt.show()
-        plt.hist(bandpass_corr_record.ravel(), bins=30)
-        plt.show()
+
         freq_mean = np.mean(bandpass_corr_record, axis=1)
         where = np.where(freq_mean>= (5/np.sqrt(sub)))
         where_num = np.shape(where)[1]
@@ -321,15 +318,11 @@ def process_acf(record, time_samp, chan_width,
         bandpass_corr_record = np.zeros(np.shape(record_T))
 
 
-    #noise = np.random.normal(loc=0, scale=1, size=(64, 2048))
+
 
     acf_array[index, :, :] = np.ma.array(np.array(auto_corr2d_fft(
                                         bandpass_corr_record, 
                                         np.shape(record_T)[1], dtype)[0]))
-
-    # acf_array[index, :, :] = np.ma.array(np.array(auto_corr2d_fft(
-    #                                     noise, 
-    #                                     2048, dtype)[0]))
 
 
     return
