@@ -241,6 +241,7 @@ def process_acf(record, time_samp, chan_width,
     Returns:
         None 
     """
+
     record_T = np.transpose(record)
 
     # Represent masked data with zeros.
@@ -262,7 +263,7 @@ def process_acf(record, time_samp, chan_width,
     record_nonzero=np.where(record_T.ravel()!=0)
 
     try:
-        # Replace masked data with mean 0, rms 1 noise
+        # Replace masked data with representative noise
         # This is done to prevent 'ringing' in the autocorrelation function from the masked
         # channels. One can not simply take the autocorrelation of 
         # masked data using the FFT method because the FFT algorithm
@@ -270,19 +271,19 @@ def process_acf(record, time_samp, chan_width,
 
         median = np.median(record_ravel[record_nonzero])
         med_dev = mad(record_ravel[record_nonzero])
-        record_zero = np.where(record_ravel==0)
-        normal_draw = np.random.normal(loc=0, scale=1,
-                                         size=np.shape(record_zero)[1])
 
+        record_zero = np.where(record_ravel==0)
+        normal_draw = np.random.normal(loc=median, scale=med_dev,
+                                         size=np.shape(record_zero)[1])
         record_ravel[record_zero] = normal_draw
         record_T = np.reshape(record_ravel, (np.shape(record_T)[0], 
                                             np.shape(record_T)[1]))
 
+
     except FloatingPointError:
-        median=0
-        med_dev = 1
+        
         record_zero = np.where(record_ravel==0)
-        normal_draw = np.random.normal(loc=median, scale=med_dev, 
+        normal_draw = np.random.normal(loc=0, scale=1, 
                                         size=np.shape(record_zero)[1])
 
         record_ravel[record_zero] = normal_draw
@@ -297,6 +298,7 @@ def process_acf(record, time_samp, chan_width,
 
     median = np.median(record_T, axis=1)
     med_dev = mad(record_T, axis=1)
+
 
     try:
         bandpass_corr_record = np.transpose((np.transpose(record_T) - median)/med_dev)
@@ -315,6 +317,7 @@ def process_acf(record, time_samp, chan_width,
 
 
     except FloatingPointError:
+        print("hello")
         bandpass_corr_record = np.zeros(np.shape(record_T))
 
 
@@ -1337,7 +1340,7 @@ def main():
 
 
         all_data = np.ones((data_shape[3], data_shape[1]*data_shape[0]), 
-                            dtype=types[dtype])
+                            types[dtype])
 
         for index, record in enumerate(data):
             all_data[:, index*data_shape[1]:(index+1)*data_shape[1]] \
