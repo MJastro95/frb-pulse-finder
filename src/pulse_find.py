@@ -281,7 +281,7 @@ def process_acf(record, time_samp, chan_width,
 
 
     except FloatingPointError:
-        
+
         record_zero = np.where(record_ravel==0)
         normal_draw = np.random.normal(loc=0, scale=1, 
                                         size=np.shape(record_zero)[1])
@@ -317,7 +317,6 @@ def process_acf(record, time_samp, chan_width,
 
 
     except FloatingPointError:
-        print("hello")
         bandpass_corr_record = np.zeros(np.shape(record_T))
 
 
@@ -1354,6 +1353,17 @@ def main():
 
         chan_width = abs(chan_width)
 
+
+        # sub_int: sampling time * sub (s)
+        # time_samp: sampling time (s)
+        # ctr_freq: center frequency of observation
+        # chan_width: frequency channel width (MHz)
+        # num_chans: number of frequency channels
+        # dm: dispersion measure pc cm^{-3}
+        # ra_string: right ascension
+        # dec_string: declination
+        # tstart: start time of scan in MJD
+
         burst_metadata = (sub_int, time_samp, ctr_freq, chan_width, 
                             num_chans, dm, ra_string, dec_string, tstart)
 
@@ -1524,9 +1534,14 @@ def main():
 
 
             mean_array = means
-
             N = ((2*int(time)) + 1)*((2*int(freq)) + 1) - 1
-            stdev = np.sqrt(2)/np.sqrt(N*num_chans*sub)
+
+            fact = 0.25*(time)*(2*sub - time -1)*(freq + 1)*(2*num_chans-freq) \
+                   + 0.25*(time + 1)*(2*sub - time)*freq*(2*num_chans - freq - 1)
+
+            fact*=2/(N*sub*num_chans)
+
+            stdev = np.sqrt(fact)*np.sqrt(2)/np.sqrt(N*num_chans*sub)
 
 
             acf_norm = means/stdev

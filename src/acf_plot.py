@@ -573,7 +573,6 @@ def main():
 
             ax1.contour(x, y, lorentzian_2d((x, y), *res.x).reshape(num_chan + 1, bounds + 1))
 
-            print(res.x)
 
             a = res.x[2]
             b = res.x[3]
@@ -588,7 +587,7 @@ def main():
                                 args=(a, b, c, d))
 
             alpha = result.x[0]
-            print(alpha)
+
             print("The slope is: " 
                     + str(-np.round(1/(np.tan(alpha)), decimals=2)) 
                     + " MHz/ms")
@@ -612,6 +611,7 @@ def main():
 
             axright1.plot(np.mean(lorentzian_2d((x, y), *res.x).reshape(num_chan + 1, bounds + 1), axis=1), array, color='r')
             axright1.margins(y=0)
+
 
     plt.show()
 
